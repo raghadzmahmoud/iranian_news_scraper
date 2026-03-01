@@ -23,7 +23,8 @@ class DatabaseConnection:
                 database=DB_NAME,
                 user=DB_USER,
                 password=DB_PASSWORD,
-                port=DB_PORT
+                port=DB_PORT,
+                sslmode='require'  # تفعيل SSL للـ Render
             )
             self.cursor = self.conn.cursor(cursor_factory=RealDictCursor)
             logger.info("✅ تم الاتصال بقاعدة البيانات بنجاح")
