@@ -52,11 +52,9 @@ LAYER_1_KEYWORDS = {
         "إسرائيل", "اسرائيل", "إسرائيل", "اسرائيل",
         # إسرائيلي
         "إسرائيلي", "اسرائيلي", "إسرائيليين", "اسرائيليين",
-        # لبنان
-        "لبنان", "لبنن",
     ],
-    "en": ["Iran", "Tehran", "IRGC", "Khamenei", "Supreme Leader", "Iranian", "Israel", "Israeli", "Lebanon"],
-    "he": ["איראן", "טהראן", "IRGC", "המשמרות המהפכניים", "ח'אמנאי", "המנהיג העליון", "הנהגה איראנית", "ישראל", "ישראלי", "לבנון"]
+    "en": ["Iran", "Tehran", "IRGC", "Khamenei", "Supreme Leader", "Iranian", "Israel", "Israeli"],
+    "he": ["איראן", "טהראן", "IRGC", "המשמרות המהפכניים", "ח'אמנאי", "המנהיג העליון", "הנהגה איראנית", "ישראל", "ישראלי"]
 }
 
 # الطبقة الثانية: أسماء العمليات العسكرية
@@ -90,47 +88,52 @@ LAYER_2_KEYWORDS = {
 # الطبقة الثالثة: سياق موسّع
 LAYER_3_KEYWORDS = {
     "ar": [
-        # شخصيات
-        "نتنياهو", "هرتسوغ", "إبراهيم جباري", "ترامب",
-        # تحالفات
+        # شخصيات إسرائيلية رئيسية
+        "نتنياهو", "هرتسوغ", "بن غفير", "سموتريتش",
+        # شخصيات عسكرية إسرائيلية
+        "الرمتكال", "رئيس الأركان", "قائد الجيش",
+        # تحالفات وأطراف معنية بالتصعيد (فقط المرتبطة بإيران)
         "محور المقاومة", "الحوثيون", "أنصار الله", "حزب الله", "كتائب حزب الله", "الحشد الشعبي",
-        # مواقع نووية
-        "نطنز", "فوردو", "أصفهان", "بارشين", "كرج", "كرمانشاه",
-        # أسلحة
-        "صاروخ فتاح", "خيبر شكن", "صواريخ باليستية", "صواريخ فرط صوتية", "مسيّرات",
-        # مصطلحات
-        "ضربة استباقية", "ضربة انتقامية", "حرب شاملة", "تصعيد إقليمي", "البرنامج النووي",
-        "تخصيب اليورانيوم", "مضيق هرمز", "حيفا"
+        # أسلحة إيرانية محددة
+        "صاروخ فتاح", "خيبر شكن", "صواريخ باليستية", "مسيّرات إيرانية",
+        # مصطلحات عسكرية محددة
+        "ضربة استباقية", "ضربة انتقامية", "تصعيد عسكري", "عملية عسكرية",
+        # مواقع جغرافية ذات صلة بالتصعيد
+        "لبنان", "الحدود الشمالية", "الجولان", "سوريا", "العراق",
+        # مصطلحات نووية محددة
+        "البرنامج النووي الإيراني", "تخصيب اليورانيوم", "نطنز", "فوردو"
     ],
     "en": [
-        # Personalities
-        "Netanyahu", "Herzog", "Jabbari", "Trump", "Pentagon",
-        # Alliances
+        # Israeli political figures
+        "Netanyahu", "Herzog", "Ben Gvir", "Smotrich",
+        # Israeli military figures
+        "IDF Chief", "Chief of Staff", "Army Commander",
+        # Alliances and parties involved in escalation (Iran-related only)
         "Axis of Resistance", "Houthis", "Ansar Allah", "Hezbollah", "Kataib Hezbollah", "PMF", "PMU",
-        # Nuclear sites
-        "Natanz", "Fordow", "Isfahan", "Parchin", "Karaj", "Kermanshah",
-        # Weapons
-        "Fattah", "Kheibar Shekan", "ballistic missiles", "hypersonic missiles", "drones", "UAV",
-        "B-2 bombers", "bunker busters", "cruise missiles", "Iron Dome", "F-35",
-        # Terms
-        "pre-emptive strike", "retaliatory strike", "all-out war", "regional escalation", "nuclear program",
-        "uranium enrichment", "Strait of Hormuz", "Haifa"
+        # Specific Iranian weapons
+        "Fattah missile", "Kheibar Shekan", "ballistic missiles", "Iranian drones",
+        # Specific military terms
+        "pre-emptive strike", "retaliatory strike", "military escalation", "military operation",
+        # Geographic locations related to escalation
+        "Lebanon", "northern border", "Golan", "Syria", "Iraq",
+        # Specific nuclear terms
+        "Iranian nuclear program", "uranium enrichment", "Natanz", "Fordow"
     ],
     "he": [
-        # אישיויות
-        "נתניהו", "הרצוג", "ג'בארי", "טראמפ", "הפנטגון",
-        # ברית
+        # דמויות פוליטיות ישראליות
+        "נתניהו", "הרצוג", "בן גביר", "סמוטריץ'",
+        # דמויות צבאיות ישראליות
+        "רמטכ\"ל", "ראש הצי", "מפקד הצבא",
+        # ברית וצדדים המעורבים בהסלמה (קשורים לאיראן בלבד)
         "ציר ההתנגדות", "החות'ים", "אנצאר אללה", "חיזבאללה", "גדודי חיזבאללה", "כוחות עָם", "PMF", "PMU",
-        # אתרים גרעיניים
-        "נאטנז", "פורדו", "אספהאן", "פארצ'ין", "קראג'", "כרמאנסאה",
-        # נשקים
-        "טיל פטאח", "ח'יבר שקן", "טילים בליסטיים", "טילים על-קוליים", "רחפנים", "UAV",
-        "מפציצי B-2", "פצצות חודרות מבצרים", "טילי קרוז", "כיפת ברזל", "מטוסי קרב F-35",
-        # מונחים
-        "תקיפה מונעת", "תקיפת נקמה", "מלחמה כוללת", "הסלמה אזורית", "תוכנית הגרעין האיראנית",
-        "העשרת אורניום", "מיצר הורמוז", "חיפה",
-        # מדינות ובסיסים
-        "קטאר", "בחרייןן", "כוויתן", "איחוד האמירויות", "בסיס אל-אודיד", "בסיסים אמריקאיים", "מדינות המפרץ"
+        # נשקים איראניים ספציפיים
+        "טיל פטאח", "ח'יבר שקן", "טילים בליסטיים", "רחפנים איראניים",
+        # מונחים צבאיים ספציפיים
+        "תקיפה מונעת", "תקיפת נקמה", "הסלמה צבאית", "פעולה צבאית",
+        # מיקומים גיאוגרפיים הקשורים להסלמה
+        "לבנון", "הגבול הצפוני", "גולן", "סוריה", "עיראק",
+        # מונחים גרעיניים ספציפיים
+        "התוכנית הגרעינית האיראנית", "העשרת אורניום", "נאטנז", "פורדו"
     ]
 }
 
@@ -193,8 +196,9 @@ def is_relevant_article(title: str, content: str, language: str = "he") -> bool:
             layer_3_match = True
             break
     
-    # المعادلة: (الطبقة_الأولى) OR (الطبقة_الثانية) OR (الطبقة_الثالثة AND الطبقة_الأولى)
-    return layer_1_match or layer_2_match or (layer_3_match and layer_1_match)
+    # المعادلة: (الطبقة_الأولى) OR (الطبقة_الثانية) OR (الطبقة_الثالثة)
+    # كلمة واحدة من أي طبقة كافية
+    return layer_1_match or layer_2_match or layer_3_match
 
 
 def get_matching_keywords(title: str, content: str, language: str = "he") -> list:
