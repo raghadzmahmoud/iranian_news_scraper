@@ -40,15 +40,20 @@ CREATE TABLE IF NOT EXISTS public.raw_data (
 INSERT INTO public.source_type (name, description) VALUES 
     ('RSS', 'مصدر RSS Feed'),
     ('API', 'مصدر API'),
-    ('Web Scraping', 'سحب من الويب')
+    ('Web Scraping', 'سحب من الويب'),
+    ('Telegram', 'مصدر Telegram'),
+    ('user_input', 'إدخال من المستخدم')
 ON CONFLICT DO NOTHING;
 
 -- إدراج المصادر الافتراضية
 INSERT INTO public.sources (source_type_id, url, active) VALUES 
     (1, 'https://www.ynet.co.il/Integration/StoryRss2.xml', true),
     (1, 'https://rss.walla.co.il/feed/1', true),
-    (1, 'https://www.maariv.co.il/Rss/RssChadashot', true)
-ON CONFLICT DO NOTHING;
+    (1, 'https://www.maariv.co.il/Rss/RssChadashot', true),
+    (5, 'text', true),
+    (5, 'voice', true),
+    (5, 'video', true)
+ON CONFLICT (url) DO NOTHING;
 
 -- إنشاء فهارس للأداء
 CREATE INDEX IF NOT EXISTS idx_raw_data_source_id ON public.raw_data(source_id);

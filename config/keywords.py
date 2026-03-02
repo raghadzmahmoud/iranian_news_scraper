@@ -3,11 +3,60 @@
 مترجمة للعبرية والإنجليزية والعربية
 """
 
+import re
+
+
+def normalize_arabic(text: str) -> str:
+    """
+    تطبيع النص العربي - إزالة الهمزات والتشكيل
+    
+    Args:
+        text: النص العربي
+        
+    Returns:
+        النص المطبّع
+    """
+    # إزالة التشكيل (الفتحة، الضمة، الكسرة، السكون، إلخ)
+    text = re.sub(r'[\u064B-\u065F]', '', text)
+    
+    # توحيد الهمزات
+    text = text.replace('أ', 'ا')  # أ → ا
+    text = text.replace('إ', 'ا')  # إ → ا
+    text = text.replace('آ', 'ا')  # آ → ا
+    text = text.replace('ؤ', 'و')  # ؤ → و
+    text = text.replace('ئ', 'ي')  # ئ → ي
+    text = text.replace('ة', 'ه')  # ة → ه
+    text = text.replace('ى', 'ي')  # ى → ي
+    
+    # إزالة المسافات الزائدة
+    text = re.sub(r'\s+', ' ', text).strip()
+    
+    return text
+
+
 # الطبقة الأولى: كلمات أساسية (يجب وجود واحدة منها على الأقل)
 LAYER_1_KEYWORDS = {
-    "ar": ["إيران", "طهران", "الحرس الثوري", "IRGC", "خامنئي", "المرشد الأعلى"],
-    "en": ["Iran", "Tehran", "IRGC", "Khamenei", "Supreme Leader", "Iranian"],
-    "he": ["איראן", "טהראן", "IRGC", "המשמרות המהפכניים", "ח'אמנאי", "המנהיג העליון", "הנהגה איראנית"]
+    "ar": [
+        # إيران - جميع الأشكال
+        "إيران", "ايران", "ایران", "إيران",
+        # طهران - جميع الأشكال
+        "طهران", "طهرن", "تهران", "تهرن",
+        # الحرس الثوري
+        "الحرس الثوري", "الحرس الثورى", "حرس ثوري", "حرس ثورى",
+        "IRGC", "irgc",
+        # خامنئي - جميع الأشكال
+        "خامنئي", "خامنئى", "خامنه", "خامنه اي", "خامنهاي",
+        # المرشد الأعلى
+        "المرشد الأعلى", "المرشد الاعلى", "مرشد أعلى", "مرشد اعلى",
+        # إسرائيل - جميع الأشكال
+        "إسرائيل", "اسرائيل", "إسرائيل", "اسرائيل",
+        # إسرائيلي
+        "إسرائيلي", "اسرائيلي", "إسرائيليين", "اسرائيليين",
+        # لبنان
+        "لبنان", "لبنن",
+    ],
+    "en": ["Iran", "Tehran", "IRGC", "Khamenei", "Supreme Leader", "Iranian", "Israel", "Israeli", "Lebanon"],
+    "he": ["איראן", "טהראן", "IRGC", "המשמרות המהפכניים", "ח'אמנאי", "המנהיג העליון", "הנהגה איראנית", "ישראל", "ישראלי", "לבנון"]
 }
 
 # الطبقة الثانية: أسماء العمليات العسكرية
@@ -107,25 +156,44 @@ def is_relevant_article(title: str, content: str, language: str = "he") -> bool:
     """
     text = (title + " " + content).lower()
     
+    # تطبيع النص العربي (إزالة الهمزات والتشكيل)
+    if language == "ar":
+        text = normalize_arabic(text)
+    
     # التحقق من الكلمات المستبعدة
     exclude_words = EXCLUDE_KEYWORDS.get(language, [])
     for word in exclude_words:
-        if word.lower() in text:
+        if normalize_arabic(word.lower()) in text if language == "ar" else word.lower() in text:
             return False
     
     # الطبقة الأولى: كلمات أساسية (يجب وجود واحدة)
     layer_1_words = LAYER_1_KEYWORDS.get(language, [])
-    layer_1_match = any(word.lower() in text for word in layer_1_words)
+    layer_1_match = False
+    for word in layer_1_words:
+        normalized_word = normalize_arabic(word.lower()) if language == "ar" else word.lower()
+        if normalized_word in text:
+            layer_1_match = True
+            break
     
     # الطبقة الثانية: أسماء العمليات
     layer_2_words = LAYER_2_KEYWORDS.get(language, [])
-    layer_2_match = any(word.lower() in text for word in layer_2_words)
+    layer_2_match = False
+    for word in layer_2_words:
+        normalized_word = normalize_arabic(word.lower()) if language == "ar" else word.lower()
+        if normalized_word in text:
+            layer_2_match = True
+            break
     
     # الطبقة الثالثة: سياق موسّع
     layer_3_words = LAYER_3_KEYWORDS.get(language, [])
-    layer_3_match = any(word.lower() in text for word in layer_3_words)
+    layer_3_match = False
+    for word in layer_3_words:
+        normalized_word = normalize_arabic(word.lower()) if language == "ar" else word.lower()
+        if normalized_word in text:
+            layer_3_match = True
+            break
     
-    # المعادلة: (الطبقة_الأولى) OR (الطبقة_الثانية) OR (الطبقة_الثالثة)
+    # المعادلة: (الطبقة_الأولى) OR (الطبقة_الثانية) OR (الطبقة_الثالثة AND الطبقة_الأولى)
     return layer_1_match or layer_2_match or (layer_3_match and layer_1_match)
 
 
@@ -142,6 +210,11 @@ def get_matching_keywords(title: str, content: str, language: str = "he") -> lis
         قائمة الكلمات المطابقة
     """
     text = (title + " " + content).lower()
+    
+    # تطبيع النص العربي
+    if language == "ar":
+        text = normalize_arabic(text)
+    
     matched = []
     
     # البحث في جميع الطبقات
@@ -152,7 +225,8 @@ def get_matching_keywords(title: str, content: str, language: str = "he") -> lis
     )
     
     for keyword in all_keywords:
-        if keyword.lower() in text:
+        normalized_keyword = normalize_arabic(keyword.lower()) if language == "ar" else keyword.lower()
+        if normalized_keyword in text:
             matched.append(keyword)
     
     return matched
@@ -172,21 +246,41 @@ def debug_filter(title: str, content: str, language: str = "he") -> dict:
     """
     text = (title + " " + content).lower()
     
+    # تطبيع النص العربي
+    if language == "ar":
+        text = normalize_arabic(text)
+    
     # التحقق من الكلمات المستبعدة
     exclude_words = EXCLUDE_KEYWORDS.get(language, [])
-    excluded = [word for word in exclude_words if word.lower() in text]
+    excluded = []
+    for word in exclude_words:
+        normalized_word = normalize_arabic(word.lower()) if language == "ar" else word.lower()
+        if normalized_word in text:
+            excluded.append(word)
     
     # الطبقة الأولى
     layer_1_words = LAYER_1_KEYWORDS.get(language, [])
-    layer_1_match = [word for word in layer_1_words if word.lower() in text]
+    layer_1_match = []
+    for word in layer_1_words:
+        normalized_word = normalize_arabic(word.lower()) if language == "ar" else word.lower()
+        if normalized_word in text:
+            layer_1_match.append(word)
     
     # الطبقة الثانية
     layer_2_words = LAYER_2_KEYWORDS.get(language, [])
-    layer_2_match = [word for word in layer_2_words if word.lower() in text]
+    layer_2_match = []
+    for word in layer_2_words:
+        normalized_word = normalize_arabic(word.lower()) if language == "ar" else word.lower()
+        if normalized_word in text:
+            layer_2_match.append(word)
     
     # الطبقة الثالثة
     layer_3_words = LAYER_3_KEYWORDS.get(language, [])
-    layer_3_match = [word for word in layer_3_words if word.lower() in text]
+    layer_3_match = []
+    for word in layer_3_words:
+        normalized_word = normalize_arabic(word.lower()) if language == "ar" else word.lower()
+        if normalized_word in text:
+            layer_3_match.append(word)
     
     return {
         "language": language,
