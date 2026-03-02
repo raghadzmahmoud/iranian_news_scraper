@@ -4,7 +4,7 @@ Video Processing Background Job
 """
 import os
 from datetime import datetime
-from database.connection import db
+from database.connection import DatabaseConnection
 from utils.logger import logger
 from config.keywords import is_relevant_article, get_matching_keywords, debug_filter
 from services.stt_service import STTService
@@ -14,7 +14,7 @@ class VideoProcessingJob:
     """معالج الملفات الفيديو في الخلفية"""
     
     @staticmethod
-    def process_video_file(uploaded_file_id: int, s3_url: str):
+    def process_video_file(uploaded_file_id: int, s3_url: str, db=None):
         """
         معالجة الملف الفيديو
         
@@ -30,7 +30,15 @@ class VideoProcessingJob:
         Args:
             uploaded_file_id: معرف الملف المرفوع
             s3_url: رابط الملف على S3
+            db: database connection (اختياري - سيتم إنشاؤه إذا لم يُعطَ)
         """
+        # إنشاء connection إذا لم تُعطَ
+        if db is None:
+            db = DatabaseConnection()
+            if not db.connect():
+                logger.error("❌ فشل الاتصال بقاعدة البيانات")
+                return
+        
         try:
             logger.info(f"🎬 جاري معالجة الملف الفيديو: {uploaded_file_id}")
             
@@ -39,18 +47,18 @@ class VideoProcessingJob:
                 stt_service = STTService()
             except Exception as e:
                 logger.error(f"❌ Failed to initialize STT service: {e}")
-                VideoProcessingJob._update_status(uploaded_file_id, "failed")
+                VideoProcessingJob._update_status(uploaded_file_id, "failed", db)
                 return
             
             # 1. تحديث الحالة إلى processing
-            VideoProcessingJob._update_status(uploaded_file_id, "processing")
+            VideoProcessingJob._update_status(uploaded_file_id, "processing", db=db)
             
             # 2. استخراج الصوت من الفيديو
             logger.info(f"🎵 جاري استخراج الصوت من الفيديو...")
             audio_s3_url = VideoProcessingJob._extract_audio_from_video(s3_url)
             if not audio_s3_url:
                 logger.error("❌ فشل استخراج الصوت من الفيديو")
-                VideoProcessingJob._update_status(uploaded_file_id, "failed")
+                VideoProcessingJob._update_status(uploaded_file_id, "failed", db=db)
                 return
             
             logger.info(f"✅ تم استخراج الصوت: {audio_s3_url}")
@@ -61,7 +69,7 @@ class VideoProcessingJob:
             
             if not stt_result['success']:
                 logger.error(f"❌ فشل تحويل الصوت: {stt_result.get('error')}")
-                VideoProcessingJob._update_status(uploaded_file_id, "failed")
+                VideoProcessingJob._update_status(uploaded_file_id, "failed", db=db)
                 return
             
             transcription = stt_result['text']
@@ -73,7 +81,7 @@ class VideoProcessingJob:
             
             # 4. حفظ النص في transcripts (في uploaded_files)
             logger.info(f"💾 جاري حفظ النص في transcripts...")
-            VideoProcessingJob._update_status(uploaded_file_id, "processing", transcription)
+            VideoProcessingJob._update_status(uploaded_file_id, "processing", transcription, db=db)
             
             # 5. فحص الصلة بالكلمات المفتاحية
             logger.info(f"🔍 جاري فحص الصلة بالكلمات المفتاحية...")
@@ -90,7 +98,7 @@ class VideoProcessingJob:
             if not is_relevant:
                 logger.warning(f"⚠️ الخبر غير ذي صلة - لم يتم العثور على كلمات مفتاحية")
                 logger.warning(f"   الكلمات المطابقة: {matched_keywords}")
-                VideoProcessingJob._update_status(uploaded_file_id, "rejected")
+                VideoProcessingJob._update_status(uploaded_file_id, "rejected", db=db)
                 return
             
             logger.info(f"✅ الخبر ذو صلة - الكلمات المفتاحية: {matched_keywords}")
@@ -101,25 +109,26 @@ class VideoProcessingJob:
                 uploaded_file_id=uploaded_file_id,
                 media_url=s3_url,
                 content=transcription,
-                tags=matched_keywords
+                tags=matched_keywords,
+                db=db
             )
             
             if not raw_data_id:
                 logger.error("❌ فشل إنشاء سجل في raw_data")
-                VideoProcessingJob._update_status(uploaded_file_id, "failed")
+                VideoProcessingJob._update_status(uploaded_file_id, "failed", db=db)
                 return
             
             logger.info(f"✅ تم إنشاء سجل raw_data برقم: {raw_data_id}")
             
             # 7. تحديث حالة الملف
-            VideoProcessingJob._update_status(uploaded_file_id, "completed", transcription)
+            VideoProcessingJob._update_status(uploaded_file_id, "completed", transcription, db=db)
             
             logger.info(f"✅ تمت معالجة الملف الفيديو بنجاح: {uploaded_file_id}")
             
         except Exception as e:
             logger.error(f"❌ خطأ في معالجة الملف الفيديو: {e}")
             try:
-                VideoProcessingJob._update_status(uploaded_file_id, "failed")
+                VideoProcessingJob._update_status(uploaded_file_id, "failed", db=db)
             except:
                 pass
     
@@ -235,7 +244,7 @@ class VideoProcessingJob:
                         pass
     
     @staticmethod
-    def _update_status(uploaded_file_id: int, status: str, transcription: str = None):
+    def _update_status(uploaded_file_id: int, status: str, transcription: str = None, db=None):
         """
         تحديث حالة الملف
         
@@ -243,7 +252,12 @@ class VideoProcessingJob:
             uploaded_file_id: معرف الملف
             status: الحالة الجديدة
             transcription: النص المستخرج (اختياري)
+            db: database connection
         """
+        if db is None:
+            logger.error("❌ لم يتم توفير database connection")
+            return
+            
         try:
             query = """
                 UPDATE public.uploaded_files 
@@ -268,7 +282,7 @@ class VideoProcessingJob:
                 pass
     
     @staticmethod
-    def _create_raw_data_record(uploaded_file_id: int, media_url: str, content: str, tags: list) -> int:
+    def _create_raw_data_record(uploaded_file_id: int, media_url: str, content: str, tags: list, db=None) -> int:
         """
         إنشاء سجل في جدول raw_data (بعد الفلترة الناجحة)
         
@@ -277,10 +291,15 @@ class VideoProcessingJob:
             media_url: رابط الملف على S3
             content: النص المستخرج
             tags: الكلمات المفتاحية المطابقة
+            db: database connection
             
         Returns:
             int: معرف السجل المحفوظ
         """
+        if db is None:
+            logger.error("❌ لم يتم توفير database connection")
+            return None
+            
         try:
             tags_str = ",".join(tags) if tags else None
             
@@ -324,7 +343,7 @@ class VideoProcessingJob:
             return None
     
     @staticmethod
-    def _update_raw_data(raw_data_id: int, transcription: str, matched_keywords: list, is_relevant: bool):
+    def _update_raw_data(raw_data_id: int, transcription: str, matched_keywords: list, is_relevant: bool, db=None):
         """
         تحديث سجل raw_data
         
@@ -333,12 +352,17 @@ class VideoProcessingJob:
             transcription: النص المستخرج
             matched_keywords: الكلمات المفتاحية المطابقة
             is_relevant: هل الخبر ذو صلة
+            db: database connection
             
         ملاحظة:
             - is_processed يبقى FALSE للملفات الصوتية/الفيديو
             - لأن is_processed مخصص للأخبار من RSS و Telegram
             - الملفات الصوتية/الفيديو لا تحتاج هذا الـ flag
         """
+        if db is None:
+            logger.error("❌ لم يتم توفير database connection")
+            return
+            
         try:
             tags_str = ",".join(matched_keywords) if matched_keywords else None
             
@@ -367,7 +391,7 @@ class VideoProcessingJob:
                 pass
     
     @staticmethod
-    def _save_transcript(uploaded_file_id: int, transcription: str, confidence: float, language: str) -> int:
+    def _save_transcript(uploaded_file_id: int, transcription: str, confidence: float, language: str, db=None) -> int:
         """
         حفظ النص المستخرج في جدول transcripts
         
@@ -376,10 +400,15 @@ class VideoProcessingJob:
             transcription: النص المستخرج
             confidence: درجة الثقة
             language: اللغة المكتشفة
+            db: database connection
             
         Returns:
             int: معرف السجل المحفوظ
         """
+        if db is None:
+            logger.error("❌ لم يتم توفير database connection")
+            return None
+            
         try:
             query = """
                 INSERT INTO public.transcripts 

@@ -20,17 +20,21 @@ from storage.database_storage import save_raw_data_to_db
 from utils.logger import logger
 
 
-def scrape_all_news(sources: list[str] = None) -> list:
+def scrape_all_news(sources: list[str] = None, db_connection=None) -> list:
     """
     سحب الأخبار من جميع المصادر
     فقط الأخبار الجديدة (اللي ما موجودة بالـ URL)
     
     Args:
         sources: قائمة المصادر (None = الكل)
+        db_connection: database connection (اختياري)
     
     Returns:
         قائمة المقالات الجديدة فقط
     """
+    # استخدام الـ connection المعطاة أو الـ global db
+    db_obj = db_connection if db_connection is not None else db
+    
     if sources is None:
         sources = list(FEEDS.keys())
 
@@ -47,7 +51,7 @@ def scrape_all_news(sources: list[str] = None) -> list:
         # تصفية الأخبار الموجودة بالفعل
         new_articles = []
         for article in articles:
-            if not db.url_exists(article.url):
+            if not db_obj.url_exists(article.url):
                 new_articles.append(article)
             else:
                 logger.info(f"⏭️  تخطي (موجودة): {article.title[:40]}...")
@@ -92,9 +96,12 @@ def extract_channel_name(telegram_url: str) -> str:
     return match.group(1) if match else None
 
 
-def scrape_telegram_sources(max_posts: int = 30, text_only: bool = True) -> list:
+def scrape_telegram_sources(max_posts: int = 30, text_only: bool = True, db_connection=None) -> list:
     """سحب البوستات من جميع مصادر Telegram في قاعدة البيانات"""
-    sources = db.get_telegram_sources()
+    # استخدام الـ connection المعطاة أو الـ global db
+    db_obj = db_connection if db_connection is not None else db
+    
+    sources = db_obj.get_telegram_sources()
     
     if not sources:
         logger.warning("⚠️  لا توجد مصادر Telegram في قاعدة البيانات")
@@ -127,8 +134,11 @@ def scrape_telegram_sources(max_posts: int = 30, text_only: bool = True) -> list
     return all_posts
 
 
-def save_telegram_posts_to_db(posts: list, filter_enabled: bool = True):
+def save_telegram_posts_to_db(posts: list, filter_enabled: bool = True, db_connection=None):
     """حفظ بوستات Telegram في قاعدة البيانات مع الفلترة"""
+    # استخدام الـ connection المعطاة أو الـ global db
+    db_obj = db_connection if db_connection is not None else db
+    
     if not posts:
         logger.info("ℹ️  لا توجد بوستات للحفظ")
         return
@@ -138,7 +148,7 @@ def save_telegram_posts_to_db(posts: list, filter_enabled: bool = True):
     filtered_count = 0
 
     for post in posts:
-        if db.url_exists(post['url']):
+        if db_obj.url_exists(post['url']):
             logger.info(f"⏭️  تخطي (موجود): {post['url']}")
             skipped_count += 1
             continue
@@ -177,7 +187,7 @@ def save_telegram_posts_to_db(posts: list, filter_enabled: bool = True):
             "tags": []
         }
 
-        result = db.insert_raw_data(post['source_id'], article_data)
+        result = db_obj.insert_raw_data(post['source_id'], article_data)
         
         if result:
             saved_count += 1

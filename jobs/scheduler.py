@@ -5,7 +5,7 @@ Job Scheduler
 import time
 import threading
 from datetime import datetime
-from database.connection import db
+from database.connection import DatabaseConnection
 from utils.logger import logger
 from jobs.audio_processing_job import AudioProcessingJob
 from jobs.video_processing_job import VideoProcessingJob
@@ -17,6 +17,7 @@ class JobScheduler:
     def __init__(self):
         self.running = False
         self.thread = None
+        self.db = None  # سيتم إنشاؤه في الـ thread
     
     def start(self):
         """بدء جدولة الـ Jobs"""
@@ -34,11 +35,19 @@ class JobScheduler:
         self.running = False
         if self.thread:
             self.thread.join(timeout=5)
+        if self.db:
+            self.db.close()
         logger.info("🛑 تم إيقاف جدولة الـ Jobs")
     
     def _run_scheduler(self):
         """تشغيل جدولة الـ Jobs"""
         logger.info("🚀 جاري تشغيل جدولة الـ Jobs...")
+        
+        # إنشاء connection منفصلة لهذا الـ thread
+        self.db = DatabaseConnection()
+        if not self.db.connect():
+            logger.error("❌ فشل الاتصال بقاعدة البيانات")
+            return
         
         while self.running:
             try:
@@ -63,8 +72,8 @@ class JobScheduler:
                 LIMIT 5
             """
             
-            db.cursor.execute(query)
-            pending_files = db.cursor.fetchall()
+            self.db.cursor.execute(query)
+            pending_files = self.db.cursor.fetchall()
             
             if not pending_files:
                 return
@@ -79,10 +88,10 @@ class JobScheduler:
                 # تحديد نوع الملف ومعالجته
                 if content_type and content_type.startswith('video/'):
                     logger.info(f"🎬 جاري معالجة ملف فيديو: {file_id}")
-                    VideoProcessingJob.process_video_file(file_id, s3_url)
+                    VideoProcessingJob.process_video_file(file_id, s3_url, db=self.db)
                 elif content_type and content_type.startswith('audio/'):
                     logger.info(f"🎙️ جاري معالجة ملف صوتي: {file_id}")
-                    AudioProcessingJob.process_audio_file(file_id, raw_data_id, s3_url)
+                    AudioProcessingJob.process_audio_file(file_id, s3_url, db=self.db)
                 else:
                     logger.warning(f"⚠️ نوع ملف غير معروف: {content_type} للملف: {file_id}")
                 

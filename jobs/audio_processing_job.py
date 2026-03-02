@@ -4,7 +4,6 @@ Audio Processing Background Job
 """
 import os
 from datetime import datetime
-from database.connection import db
 from utils.logger import logger
 from config.keywords import is_relevant_article, get_matching_keywords, debug_filter
 from services.stt_service import STTService
@@ -22,7 +21,7 @@ class AudioProcessingJob:
             self.stt_service = None
     
     @staticmethod
-    def process_audio_file(uploaded_file_id: int, raw_data_id: int, s3_url: str):
+    def process_audio_file(uploaded_file_id: int, s3_url: str, db=None):
         """
         معالجة الملف الصوتي
         
@@ -34,9 +33,17 @@ class AudioProcessingJob:
         
         Args:
             uploaded_file_id: معرف الملف المرفوع
-            raw_data_id: معرف السجل في raw_data
             s3_url: رابط الملف على S3
+            db: database connection (اختياري - سيتم إنشاؤه إذا لم يُعطَ)
         """
+        # إنشاء connection إذا لم تُعطَ
+        if db is None:
+            from database.connection import DatabaseConnection
+            db = DatabaseConnection()
+            if not db.connect():
+                logger.error("❌ فشل الاتصال بقاعدة البيانات")
+                return
+        
         try:
             logger.info(f"🎙️ جاري معالجة الملف الصوتي: {uploaded_file_id}")
             
@@ -45,13 +52,13 @@ class AudioProcessingJob:
                 stt_service = STTService()
             except Exception as e:
                 logger.error(f"❌ Failed to initialize STT service: {e}")
-                AudioProcessingJob._update_status(uploaded_file_id, "failed")
+                AudioProcessingJob._update_status(uploaded_file_id, "failed", db=db)
                 return
             
             # ========================================
             # Step 1: تحديث الحالة إلى processing
             # ========================================
-            AudioProcessingJob._update_status(uploaded_file_id, "processing")
+            AudioProcessingJob._update_status(uploaded_file_id, "processing", db=db)
             
             # ========================================
             # Step 2: تحويل الصوت لنص (STT) - بدون فلترة
@@ -61,7 +68,7 @@ class AudioProcessingJob:
             
             if not stt_result['success']:
                 logger.error(f"❌ فشل تحويل الصوت: {stt_result.get('error')}")
-                AudioProcessingJob._update_status(uploaded_file_id, "failed")
+                AudioProcessingJob._update_status(uploaded_file_id, "failed", db=db)
                 return
             
             transcription = stt_result['text']
@@ -75,7 +82,7 @@ class AudioProcessingJob:
             # Step 3: حفظ الـ transcription في uploaded_files (بدون فلترة)
             # ========================================
             logger.info(f"💾 Step 3: حفظ الـ transcription في uploaded_files...")
-            AudioProcessingJob._update_status(uploaded_file_id, "transcribed", transcription)
+            AudioProcessingJob._update_status(uploaded_file_id, "transcribed", transcription, db=db)
             logger.info(f"✅ تم حفظ الـ transcription: {uploaded_file_id}")
             
             # ========================================
@@ -100,18 +107,32 @@ class AudioProcessingJob:
             if not is_relevant:
                 logger.warning(f"⚠️ الخبر غير ذي صلة - لم يتم العثور على كلمات مفتاحية")
                 logger.warning(f"   الكلمات المطابقة: {matched_keywords}")
-                # حفظ في raw_data مع is_relevant = False
-                AudioProcessingJob._update_raw_data(raw_data_id, transcription, matched_keywords, False)
                 # تحديث status في uploaded_files إلى rejected
-                AudioProcessingJob._update_status(uploaded_file_id, "rejected", transcription)
+                AudioProcessingJob._update_status(uploaded_file_id, "rejected", transcription, db=db)
                 logger.info(f"✅ تم رفض الخبر (غير ذي صلة): {uploaded_file_id}")
                 return
             
             logger.info(f"✅ الخبر ذو صلة - الكلمات المفتاحية: {matched_keywords}")
-            # حفظ في raw_data مع is_relevant = True
-            AudioProcessingJob._update_raw_data(raw_data_id, transcription, matched_keywords, True)
+            
+            # إنشاء سجل في raw_data
+            logger.info(f"💾 جاري إنشاء سجل في raw_data...")
+            raw_data_id = AudioProcessingJob._create_raw_data_record(
+                uploaded_file_id=uploaded_file_id,
+                media_url=s3_url,
+                content=transcription,
+                tags=matched_keywords,
+                db=db
+            )
+            
+            if not raw_data_id:
+                logger.error("❌ فشل إنشاء سجل في raw_data")
+                AudioProcessingJob._update_status(uploaded_file_id, "failed", db=db)
+                return
+            
+            logger.info(f"✅ تم إنشاء سجل raw_data برقم: {raw_data_id}")
+            
             # تحديث status في uploaded_files إلى completed
-            AudioProcessingJob._update_status(uploaded_file_id, "completed", transcription)
+            AudioProcessingJob._update_status(uploaded_file_id, "completed", transcription, db=db)
             
             logger.info(f"✅ تمت معالجة الملف الصوتي بنجاح: {uploaded_file_id}")
             
@@ -120,12 +141,12 @@ class AudioProcessingJob:
             import traceback
             logger.error(f"❌ Traceback: {traceback.format_exc()}")
             try:
-                AudioProcessingJob._update_status(uploaded_file_id, "failed")
+                AudioProcessingJob._update_status(uploaded_file_id, "failed", db=db)
             except:
                 pass
     
     @staticmethod
-    def _update_status(uploaded_file_id: int, status: str, transcription: str = None):
+    def _update_status(uploaded_file_id: int, status: str, transcription: str = None, db=None):
         """
         تحديث حالة الملف
         
@@ -133,7 +154,12 @@ class AudioProcessingJob:
             uploaded_file_id: معرف الملف
             status: الحالة الجديدة
             transcription: النص المستخرج (اختياري)
+            db: database connection
         """
+        if db is None:
+            logger.error("❌ لم يتم توفير database connection")
+            return
+            
         try:
             query = """
                 UPDATE public.uploaded_files 
@@ -158,7 +184,68 @@ class AudioProcessingJob:
                 pass
     
     @staticmethod
-    def _update_raw_data(raw_data_id: int, transcription: str, matched_keywords: list, is_relevant: bool):
+    def _create_raw_data_record(uploaded_file_id: int, media_url: str, content: str, tags: list, db=None) -> int:
+        """
+        إنشاء سجل في جدول raw_data (بعد الفلترة الناجحة)
+        
+        Args:
+            uploaded_file_id: معرف الملف المرفوع
+            media_url: رابط الملف على S3
+            content: النص المستخرج
+            tags: الكلمات المفتاحية المطابقة
+            db: database connection
+            
+        Returns:
+            int: معرف السجل المحفوظ
+        """
+        if db is None:
+            logger.error("❌ لم يتم توفير database connection")
+            return None
+            
+        try:
+            tags_str = ",".join(tags) if tags else None
+            
+            # ✅ استخدم الـ columns الموجودة فقط في raw_data table
+            query = """
+                INSERT INTO public.raw_data 
+                (source_id, source_type_id, url, content, media_url, 
+                 fetched_at, is_processed, stt_status, tags)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+            """
+            
+            db.cursor.execute(query, (
+                7,                      # source_id = 7 (audio)
+                5,                      # source_type_id = 5 (user_input)
+                media_url,              # url
+                content,                # content (النص المستخرج)
+                media_url,              # media_url
+                datetime.utcnow(),      # fetched_at
+                False,                  # is_processed
+                "completed",            # stt_status
+                tags_str                # tags
+            ))
+            
+            result = db.cursor.fetchone()
+            db.conn.commit()
+            
+            if result:
+                raw_data_id = result['id'] if isinstance(result, dict) else result[0]
+                logger.info(f"✅ تم إنشاء سجل raw_data برقم: {raw_data_id}")
+                return raw_data_id
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"❌ خطأ في إنشاء سجل raw_data: {e}")
+            try:
+                db.conn.rollback()
+            except:
+                pass
+            return None
+    
+    @staticmethod
+    def _update_raw_data(raw_data_id: int, transcription: str, matched_keywords: list, is_relevant: bool, db=None):
         """
         تحديث سجل raw_data
         
@@ -167,12 +254,17 @@ class AudioProcessingJob:
             transcription: النص المستخرج
             matched_keywords: الكلمات المفتاحية المطابقة
             is_relevant: هل الخبر ذو صلة
+            db: database connection
             
         ملاحظة:
             - is_processed يبقى FALSE للملفات الصوتية/الفيديو
             - لأن is_processed مخصص للأخبار من RSS و Telegram
             - الملفات الصوتية/الفيديو لا تحتاج هذا الـ flag
         """
+        if db is None:
+            logger.error("❌ لم يتم توفير database connection")
+            return
+            
         try:
             tags_str = ",".join(matched_keywords) if matched_keywords else None
             

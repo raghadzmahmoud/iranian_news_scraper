@@ -1,75 +1,115 @@
 """
 Worker منفصل لمعالجة الملفات الصوتية فقط
-Audio Processing Worker
+Audio Processing Worker - يعمل كل 2 دقيقة
 """
 import time
-from database.connection import db
+import threading
+from datetime import datetime
+from database.connection import DatabaseConnection
 from utils.logger import logger
 from jobs.audio_processing_job import AudioProcessingJob
+
+
+class AudioWorker:
+    """Worker لمعالجة الملفات الصوتية"""
+    
+    def __init__(self, interval=120):  # 120 ثانية = 2 دقيقة
+        self.running = False
+        self.thread = None
+        self.interval = interval
+        self.db = None  # سيتم إنشاؤه في الـ thread
+    
+    def start(self):
+        """بدء الـ Worker"""
+        if self.running:
+            logger.warning("⚠️ Audio Worker قيد التشغيل بالفعل")
+            return
+        
+        self.running = True
+        logger.info(f"✅ تم بدء Audio Worker (كل {self.interval} ثانية)")
+        self._run()
+    
+    def stop(self):
+        """إيقاف الـ Worker"""
+        self.running = False
+        if self.db:
+            self.db.close()
+        logger.info("🛑 تم إيقاف Audio Worker")
+    
+    def _run(self):
+        """تشغيل الـ Worker"""
+        logger.info("🚀 جاري تشغيل Audio Worker...")
+        
+        # إنشاء connection منفصلة لهذا الـ thread
+        self.db = DatabaseConnection()
+        if not self.db.connect():
+            logger.error("❌ فشل الاتصال بقاعدة البيانات")
+            return
+        
+        while self.running:
+            try:
+                logger.info(f"🎙️ جاري معالجة الملفات الصوتية في {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                
+                # البحث عن الملفات الصوتية المعلقة
+                self._process_pending_audios()
+                
+                # الانتظار للـ interval المحدد
+                time.sleep(self.interval)
+                
+            except Exception as e:
+                logger.error(f"❌ خطأ في Audio Worker: {e}")
+                time.sleep(self.interval)
+    
+    def _process_pending_audios(self):
+        """معالجة الملفات الصوتية المعلقة"""
+        try:
+            # البحث عن الملفات الصوتية بحالة pending
+            query = """
+                SELECT id, s3_url, content_type 
+                FROM public.uploaded_files 
+                WHERE status = 'pending' AND content_type LIKE 'audio/%'
+                LIMIT 5
+            """
+            
+            self.db.cursor.execute(query)
+            pending_audios = self.db.cursor.fetchall()
+            
+            if not pending_audios:
+                logger.info("ℹ️ لا توجد ملفات صوتية معلقة")
+                return
+            
+            logger.info(f"📋 وجدت {len(pending_audios)} ملف صوتي معلق")
+            
+            for audio_record in pending_audios:
+                file_id = audio_record['id'] if isinstance(audio_record, dict) else audio_record[0]
+                s3_url = audio_record['s3_url'] if isinstance(audio_record, dict) else audio_record[1]
+                
+                try:
+                    logger.info(f"🎙️ جاري معالجة ملف صوتي: {file_id}")
+                    AudioProcessingJob.process_audio_file(file_id, s3_url, db=self.db)
+                except Exception as e:
+                    logger.error(f"❌ خطأ في معالجة الملف {file_id}: {e}")
+                
+        except Exception as e:
+            logger.error(f"❌ خطأ في البحث عن الملفات الصوتية المعلقة: {e}")
 
 
 def main():
     """تشغيل الـ Audio Worker"""
     logger.info("🎙️ جاري بدء Audio Worker...")
     
-    # الاتصال بقاعدة البيانات
-    if not db.connect():
-        logger.error("❌ فشل الاتصال بقاعدة البيانات")
-        return
-    
-    logger.info("✅ تم الاتصال بقاعدة البيانات")
-    logger.info("✅ Audio Worker يعمل الآن...")
+    # بدء الـ Worker
+    worker = AudioWorker(interval=120)  # 2 دقيقة
+    worker.start()
     
     try:
+        logger.info("✅ Audio Worker يعمل الآن...")
+        # الاستمرار في التشغيل
         while True:
-            try:
-                # البحث عن الملفات الصوتية المعلقة
-                query = """
-                    SELECT id, s3_url 
-                    FROM public.uploaded_files 
-                    WHERE status = 'pending'
-                    LIMIT 5
-                """
-                
-                db.cursor.execute(query)
-                pending_files = db.cursor.fetchall()
-                
-                if pending_files:
-                    logger.info(f"📋 وجدت {len(pending_files)} ملف صوتي معلق")
-                    
-                    for file_record in pending_files:
-                        file_id = file_record['id'] if isinstance(file_record, dict) else file_record[0]
-                        s3_url = file_record['s3_url'] if isinstance(file_record, dict) else file_record[1]
-                        
-                        # البحث عن السجل المرتبط في raw_data
-                        raw_data_query = """
-                            SELECT id FROM public.raw_data 
-                            WHERE media_url = %s
-                            LIMIT 1
-                        """
-                        db.cursor.execute(raw_data_query, (s3_url,))
-                        raw_data_result = db.cursor.fetchone()
-                        
-                        if not raw_data_result:
-                            logger.warning(f"⚠️ لم يتم العثور على سجل raw_data للملف: {file_id}")
-                            continue
-                        
-                        raw_data_id = raw_data_result['id'] if isinstance(raw_data_result, dict) else raw_data_result[0]
-                        
-                        # معالجة الملف الصوتي
-                        logger.info(f"🎙️ جاري معالجة الملف الصوتي: {file_id}")
-                        AudioProcessingJob.process_audio_file(file_id, raw_data_id, s3_url)
-                
-                # الانتظار 5 ثوان قبل الفحص التالي
-                time.sleep(5)
-                
-            except Exception as e:
-                logger.error(f"❌ خطأ في معالجة الملفات: {e}")
-                time.sleep(5)
-                
+            time.sleep(1)
     except KeyboardInterrupt:
         logger.info("🛑 جاري إيقاف Audio Worker...")
-        db.close()
+        worker.stop()
         logger.info("✅ تم إيقاف Audio Worker")
 
 

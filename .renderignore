@@ -1,0 +1,73 @@
+# Render Ignore File
+# ملف تجاهل Render
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+docs/
+
+# Tests
+tests/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs
+logs/
+*.log
+
+# Media (large files)
+media/
+*.mp4
+*.mp3
+*.wav
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Other
+.github/
+.gitlab-ci.yml
+.travis.yml
+Makefile
+docker-compose.yml
+Dockerfile
