@@ -27,9 +27,3 @@ build/
 media/
 keywords_export.*
 run_all_workers.*
-worker*.py
-run_scheduler.py
-run_video_job.py
-main_telegram.py
-main.py
-setup_database.py
