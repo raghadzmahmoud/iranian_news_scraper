@@ -194,9 +194,9 @@ class ManualInputProcessor:
                 url,                                       # url
                 text,                                      # content
                 datetime.utcnow(),                         # fetched_at
-                True,                                      # is_processed
-                datetime.utcnow(),                         # processed_at
-                "completed",                               # stt_status
+                False,                                     # is_processed - يجب أن يبقى False
+                None,                                      # processed_at - لا نحدثه الآن
+                "not_needed",                              # stt_status - نصوص فقط
                 tags_str,                                  # tags
             ))
             
