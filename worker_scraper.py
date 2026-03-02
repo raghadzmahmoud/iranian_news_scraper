@@ -4,6 +4,7 @@ Scraper Worker - يعمل كل 10 دقايق
 """
 import time
 import threading
+import random
 from datetime import datetime
 from database.connection import DatabaseConnection
 from utils.logger import logger
@@ -36,56 +37,115 @@ class ScraperWorker:
             self.db.close()
         logger.info("🛑 تم إيقاف Scraper Worker")
     
-    def _run(self):
-        """تشغيل الـ Worker"""
-        logger.info("🚀 جاري تشغيل Scraper Worker...")
-        
-        # إنشاء connection منفصلة لهذا الـ thread
-        self.db = DatabaseConnection()
-        if not self.db.connect():
-            logger.error("❌ فشل الاتصال بقاعدة البيانات")
-            return
-        
-        while self.running:
+    def run_once(self):
+        """تشغيل دورة واحدة من الـ Scraper"""
+        try:
+            # إنشاء connection منفصلة
+            db = DatabaseConnection()
+            if not db.connect():
+                logger.error("❌ فشل الاتصال بقاعدة البيانات")
+                return False
+            
+            logger.info("✅ تم الاتصال بقاعدة البيانات بنجاح")
+            logger.info(f"📰 جاري تشغيل Scraper Job في {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            
+            # ========================================
+            # Step 1: سحب الأخبار من RSS
+            # ========================================
+            logger.info("📰 جاري سحب الأخبار من RSS...")
             try:
-                logger.info(f"📰 جاري تشغيل Scraper Job في {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-                
-                # ========================================
-                # Step 1: سحب الأخبار من RSS
-                # ========================================
-                logger.info("📰 جاري سحب الأخبار من RSS...")
-                try:
-                    rss_articles = scrape_all_news(db_connection=self.db)
-                    if rss_articles:
-                        logger.info(f"✅ تم سحب {len(rss_articles)} مقالة من RSS")
-                    else:
-                        logger.info("ℹ️ لا توجد أخبار جديدة من RSS")
-                except Exception as e:
-                    logger.error(f"❌ خطأ في سحب أخبار RSS: {e}")
-                
-                # ========================================
-                # Step 2: سحب البوستات من Telegram
-                # ========================================
-                logger.info("📱 جاري سحب البوستات من Telegram...")
-                try:
-                    telegram_posts = scrape_telegram_sources(max_posts=30, db_connection=self.db)
-                    if telegram_posts:
-                        logger.info(f"✅ تم سحب {len(telegram_posts)} بوست من Telegram")
-                        # حفظ البوستات في قاعدة البيانات
-                        save_telegram_posts_to_db(telegram_posts, filter_enabled=True, db_connection=self.db)
-                    else:
-                        logger.info("ℹ️ لا توجد بوستات جديدة من Telegram")
-                except Exception as e:
-                    logger.error(f"❌ خطأ في سحب بوستات Telegram: {e}")
-                
-                logger.info(f"✅ انتهت دورة الـ Scraping في {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-                
-                # الانتظار للـ interval المحدد
-                time.sleep(self.interval)
-                
+                rss_articles = scrape_all_news(db_connection=db)
+                if rss_articles:
+                    logger.info(f"✅ تم سحب {len(rss_articles)} مقالة من RSS")
+                    # حفظ المقالات في قاعدة البيانات
+                    saved_count = 0
+                    failed_count = 0
+                    for i, article in enumerate(rss_articles, 1):
+                        try:
+                            # تحويل NewsArticle إلى dict للحفظ
+                            article_data = {
+                                "url": article.url,
+                                "full_text": article.full_text or article.summary,
+                                "summary": article.summary,
+                                "pub_date": article.pub_date,
+                                "fetched_at": datetime.now(),
+                                "image_url": article.image_url,
+                                "tags": article.tags
+                            }
+                            
+                            # البحث عن source_id الصحيح حسب نوع المصدر
+                            source_id = self._get_source_id_for_rss(db)
+                            
+                            result = db.insert_raw_data(source_id, article_data)
+                            if result:
+                                saved_count += 1
+                                logger.info(f"💾 تم حفظ ({i}/{len(rss_articles)}): {article.title[:50]}...")
+                            else:
+                                logger.info(f"⏭️ مقال موجود ({i}/{len(rss_articles)}): {article.title[:50]}...")
+                        except Exception as e:
+                            failed_count += 1
+                            logger.error(f"❌ خطأ في حفظ المقال ({i}/{len(rss_articles)}): {e}")
+                            # إعادة تعيين الـ transaction بعد الخطأ
+                            try:
+                                db.conn.rollback()
+                            except:
+                                pass
+                    
+                    logger.info(f"📊 نتائج الحفظ: ✅ {saved_count} نجح، ❌ {failed_count} فشل من أصل {len(rss_articles)} مقالة")
+                else:
+                    logger.info("ℹ️ لا توجد أخبار جديدة من RSS")
             except Exception as e:
-                logger.error(f"❌ خطأ في Scraper Worker: {e}")
-                time.sleep(self.interval)
+                logger.error(f"❌ خطأ في سحب أخبار RSS: {e}")
+            
+            # ========================================
+            # Step 2: سحب البوستات من Telegram
+            # ========================================
+            logger.info("📱 جاري سحب البوستات من Telegram...")
+            try:
+                telegram_posts = scrape_telegram_sources(max_posts=30, db_connection=db)
+                if telegram_posts:
+                    logger.info(f"✅ تم سحب {len(telegram_posts)} بوست من Telegram")
+                    # حفظ البوستات في قاعدة البيانات
+                    save_telegram_posts_to_db(telegram_posts, filter_enabled=True, db_connection=db)
+                else:
+                    logger.info("ℹ️ لا توجد بوستات جديدة من Telegram")
+            except Exception as e:
+                logger.error(f"❌ خطأ في سحب بوستات Telegram: {e}")
+            
+            logger.info(f"✅ انتهت دورة الـ Scraping في {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            
+            db.close()
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ خطأ في Scraper run_once: {e}")
+            return False
+    
+    def _get_source_id_for_rss(self, db):
+        """الحصول على source_id للـ RSS (افتراضي = 1)"""
+        try:
+            # البحث عن أول مصدر RSS نشط
+            db.cursor.execute("""
+                SELECT id FROM public.sources 
+                WHERE source_type_id = 1 AND is_active = true 
+                LIMIT 1
+            """)
+            result = db.cursor.fetchone()
+            if result:
+                source_id = result['id'] if isinstance(result, dict) else result[0]
+                logger.info(f"✅ وجدت مصدر RSS برقم: {source_id}")
+                return source_id
+            else:
+                logger.warning("⚠️ لم يتم العثور على مصدر RSS نشط، استخدام ID افتراضي (1)")
+                return 1
+        except Exception as e:
+            logger.error(f"❌ خطأ في البحث عن source_id: {e}")
+            # إعادة تعيين الـ transaction بعد الخطأ
+            try:
+                db.conn.rollback()
+            except:
+                pass
+            return 1
 
 
 def main():
