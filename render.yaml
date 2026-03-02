@@ -3,9 +3,11 @@ services:
     name: iran-news-api
     env: python
     plan: free
-    buildCommand: pip install -r requirements.txt
+    buildCommand: pip install --upgrade pip setuptools wheel && pip install -r requirements.txt
     startCommand: uvicorn app:app --host 0.0.0.0 --port 8000
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.7
       - key: PYTHONUNBUFFERED
         value: 1
       - key: DB_NAME
@@ -29,10 +31,4 @@ services:
       - key: GCS_BUCKET_NAME
         sync: false
       - key: GOOGLE_APPLICATION_CREDENTIALS
-        sync: false
-      - key: TELEGRAM_API_ID
-        sync: false
-      - key: TELEGRAM_API_HASH
-        sync: false
-      - key: TELEGRAM_PHONE
         sync: false
