@@ -1,24 +1,14 @@
 services:
-  # ========================================
-  # API Service
-  # ========================================
   - type: web
     name: iran-news-api
     env: python
     plan: free
     runtime: python-3.11
-    buildCommand: bash build.sh
-    startCommand: bash start_api.sh
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port 8000
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.7
-      - key: PORT
-        value: 8000
-      - key: HOST
-        value: 0.0.0.0
       - key: PYTHONUNBUFFERED
         value: 1
-      # Database Configuration (Existing Hosted DB)
       - key: DB_NAME
         value: iran_news_pipeline
       - key: DB_HOST
@@ -29,7 +19,6 @@ services:
         sync: false
       - key: DB_PORT
         value: 5432
-      # AWS Configuration
       - key: AWS_REGION
         sync: false
       - key: AWS_ACCESS_KEY_ID
@@ -38,60 +27,10 @@ services:
         sync: false
       - key: S3_BUCKET_NAME
         sync: false
-      # Google Cloud Configuration
       - key: GCS_BUCKET_NAME
         sync: false
       - key: GOOGLE_APPLICATION_CREDENTIALS
         sync: false
-      # Telegram Configuration
-      - key: TELEGRAM_API_ID
-        sync: false
-      - key: TELEGRAM_API_HASH
-        sync: false
-      - key: TELEGRAM_PHONE
-        sync: false
-
-  # ========================================
-  # Worker Service
-  # ========================================
-  - type: background_worker
-    name: iran-news-worker
-    env: python
-    plan: free
-    runtime: python-3.11
-    buildCommand: bash build.sh
-    startCommand: bash start_worker.sh
-    envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.7
-      - key: PYTHONUNBUFFERED
-        value: 1
-      # Database Configuration (Existing Hosted DB)
-      - key: DB_NAME
-        value: iran_news_pipeline
-      - key: DB_HOST
-        value: dpg-d6hl9v7gi27c73ftat10-a.oregon-postgres.render.com
-      - key: DB_USER
-        value: iran_news_pipeline_user
-      - key: DB_PASSWORD
-        sync: false
-      - key: DB_PORT
-        value: 5432
-      # AWS Configuration
-      - key: AWS_REGION
-        sync: false
-      - key: AWS_ACCESS_KEY_ID
-        sync: false
-      - key: AWS_SECRET_ACCESS_KEY
-        sync: false
-      - key: S3_BUCKET_NAME
-        sync: false
-      # Google Cloud Configuration
-      - key: GCS_BUCKET_NAME
-        sync: false
-      - key: GOOGLE_APPLICATION_CREDENTIALS
-        sync: false
-      # Telegram Configuration
       - key: TELEGRAM_API_ID
         sync: false
       - key: TELEGRAM_API_HASH
