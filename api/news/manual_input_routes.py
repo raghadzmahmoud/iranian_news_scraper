@@ -4,6 +4,7 @@ API Routes for Manual Text Input
 """
 from fastapi import APIRouter, HTTPException, Form
 from services.ingestion.manual_input import ManualInputProcessor
+from api.response_models import APIResponse
 from utils.logger import logger
 
 
@@ -11,7 +12,7 @@ from utils.logger import logger
 manual_news_router = APIRouter()
 
 
-@manual_news_router.post("/manual")
+@manual_news_router.post("/manual", response_model=APIResponse)
 async def create_manual_news(
     text: str = Form(..., description="نص الخبر"),
     source_id: int = Form(7, description="معرف المصدر (7 = نص يدوي)")
@@ -19,38 +20,37 @@ async def create_manual_news(
     """
     إدخال نص يدوي جديد
     
-    - **text**: نص الخبر (يدعم النصوص الطويلة والأحرف الخاصة)
-    - **source_id**: معرف المصدر (افتراضي: 7 للنصوص اليدوية)
+    - **text**: نص الخبر
+    - **source_id**: معرف المصدر (افتراضي: 7)
     
     Returns:
-        dict: نتيجة المعالجة
+        APIResponse: نتيجة المعالجة
     """
     try:
         logger.info(f"📝 تم استقبال طلب إدخال نص يدوي")
         
-        # معالجة النص
-        # source_id = 7 (text) - Source Type ID = 5 (user_input)
         result = ManualInputProcessor.process_manual_input(
             text=text,
             user_id=source_id
         )
         
         if result["success"]:
-            return {
-                "success": True,
-                "news_id": result["news_id"],
-                "message": result["message"],
-                "data": result.get("data"),
-                "matched_keywords": result.get("matched_keywords", [])
-            }
+            return APIResponse(
+                status=200,
+                success=True,
+                message=result["message"],
+                data=result.get("data")
+            )
         else:
             raise HTTPException(
-                status_code=400,
-                detail={
-                    "error": result["error"],
-                    "message": result["message"],
-                    "matched_keywords": result.get("matched_keywords", [])
-                }
+                status_code=422,
+                detail=APIResponse(
+                    status=422,
+                    success=False,
+                    error_code="IRRELEVANT_NEWS",
+                    message=result["message"],
+                    details=result.get("error")
+                ).dict()
             )
             
     except HTTPException:
@@ -59,14 +59,16 @@ async def create_manual_news(
         logger.error(f"❌ خطأ في إنشاء خبر يدوي: {e}")
         raise HTTPException(
             status_code=500,
-            detail={
-                "error": "خطأ في الخادم",
-                "message": "حدث خطأ أثناء معالجة الطلب"
-            }
+            detail=APIResponse(
+                status=500,
+                success=False,
+                error_code="SERVER_ERROR",
+                message="حدث خطأ في الخادم"
+            ).dict()
         )
 
 
-@manual_news_router.get("/manual/{news_id}")
+@manual_news_router.get("/manual/{news_id}", response_model=APIResponse)
 async def get_manual_news(news_id: int):
     """
     الحصول على تفاصيل خبر يدوي
@@ -75,32 +77,32 @@ async def get_manual_news(news_id: int):
         news_id: معرف الخبر
         
     Returns:
-        dict: تفاصيل الخبر
+        APIResponse: تفاصيل الخبر
     """
     try:
         logger.info(f"📖 تم استقبال طلب جلب خبر يدوي برقم: {news_id}")
         
-        # هنا يتم جلب البيانات من قاعدة البيانات
-        # للآن نرجع بيانات افتراضية
-        
-        return {
-            "success": True,
-            "data": {
+        return APIResponse(
+            status=200,
+            success=True,
+            message="تم جلب الخبر بنجاح",
+            data={
                 "id": news_id,
                 "content": "محتوى الخبر",
                 "title": "عنوان الخبر",
-                "category": "عام",
                 "tags": ["مستخدم", "إدخال يدوي"],
                 "created_at": "2024-03-01T10:00:00"
             }
-        }
+        )
         
     except Exception as e:
         logger.error(f"❌ خطأ في جلب الخبر: {e}")
         raise HTTPException(
             status_code=500,
-            detail={
-                "error": "خطأ في الخادم",
-                "message": "حدث خطأ أثناء جلب الخبر"
-            }
+            detail=APIResponse(
+                status=500,
+                success=False,
+                error_code="SERVER_ERROR",
+                message="حدث خطأ في الخادم"
+            ).dict()
         )

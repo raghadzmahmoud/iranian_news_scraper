@@ -103,10 +103,10 @@ class VideoInputProcessor:
             
             return {
                 "success": True,
+                "message": "تم رفع الملف بنجاح. سيتم تحليل المحتوى في الخلفية للتحقق من ارتباطه بالأحداث الجارية. في حال عدم وجود صلة، لن يتم حفظه ضمن النظام.",
                 "data": {
                     "uploaded_file_id": uploaded_file_id,
-                    "video_url": video_s3_url,
-                    "message": "تم رفع الملف بنجاح. سيتم معالجته في الخلفية."
+                    "video_url": video_s3_url
                 }
             }
             

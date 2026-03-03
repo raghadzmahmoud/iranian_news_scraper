@@ -45,9 +45,8 @@ class ManualInputProcessor:
                 logger.warning(f"⚠️ الخبر غير ذي صلة - لم يتم العثور على كلمات مفتاحية")
                 return {
                     "success": False,
-                    "error": "الخبر غير ذي صلة",
-                    "message": "الخبر المدخل لا يتعلق بإيران والتصعيد العسكري. يرجى إدخال خبر ذي صلة.",
-                    "matched_keywords": matched_keywords
+                    "error": "الخبر لا يندرج ضمن نطاق التغطية (إيران – إسرائيل – التصعيد العسكري الحالي)",
+                    "message": "تم رفض الخبر لأنه لا يندرج ضمن نطاق التغطية. يجب أن يتضمن الخبر إشارات واضحة إلى الأطراف أو العمليات العسكرية المرتبطة بالأحداث الجارية."
                 }
             
             logger.info(f"✅ الخبر ذو صلة - الكلمات المفتاحية المطابقة: {matched_keywords}")
@@ -59,9 +58,14 @@ class ManualInputProcessor:
                 return {
                     "success": True,
                     "news_id": processed_data["id"],
-                    "message": "تم حفظ الخبر بنجاح",
-                    "data": processed_data,
-                    "matched_keywords": matched_keywords
+                    "message": "تم قبول الخبر وحفظه بنجاح",
+                    "data": {
+                        "id": processed_data["id"],
+                        "title": processed_data.get("title"),
+                        "content": processed_data.get("content"),
+                        "tags": processed_data.get("tags"),
+                        "created_at": processed_data.get("created_at")
+                    }
                 }
             else:
                 return {
