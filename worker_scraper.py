@@ -28,7 +28,22 @@ class ScraperWorker:
         
         self.running = True
         logger.info(f"✅ تم بدء Scraper Worker (كل {self.interval} ثانية)")
-        self._run()
+        self.thread = threading.Thread(target=self._run, daemon=True)
+        self.thread.start()
+    
+    def _run(self):
+        """حلقة التشغيل الرئيسية"""
+        while self.running:
+            try:
+                self.run_once()
+            except Exception as e:
+                logger.error(f"❌ خطأ في حلقة الـ Scraper: {e}")
+            
+            # الانتظار قبل الدورة التالية
+            for _ in range(self.interval):
+                if not self.running:
+                    break
+                time.sleep(1)
     
     def stop(self):
         """إيقاف الـ Worker"""
@@ -54,14 +69,28 @@ class ScraperWorker:
             # ========================================
             logger.info("📰 جاري سحب الأخبار من RSS...")
             try:
+                from config.keywords import is_relevant_article, get_matching_keywords
+                
                 rss_articles = scrape_all_news(db_connection=db)
                 if rss_articles:
                     logger.info(f"✅ تم سحب {len(rss_articles)} مقالة من RSS")
                     # حفظ المقالات في قاعدة البيانات
                     saved_count = 0
                     failed_count = 0
+                    filtered_count = 0
                     for i, article in enumerate(rss_articles, 1):
                         try:
+                            # فلترة المقالة قبل الحفظ
+                            is_relevant = is_relevant_article(article.title, article.full_text or article.summary, language="he")
+                            
+                            if not is_relevant:
+                                filtered_count += 1
+                                logger.info(f"🚫 تم تصفية ({i}/{len(rss_articles)}): {article.title[:50]}... (غير ذي صلة)")
+                                continue
+                            
+                            # الحصول على الكلمات المفتاحية المطابقة
+                            matched_keywords = get_matching_keywords(article.title, article.full_text or article.summary, language="he")
+                            
                             # تحويل NewsArticle إلى dict للحفظ
                             article_data = {
                                 "url": article.url,
@@ -70,7 +99,7 @@ class ScraperWorker:
                                 "pub_date": article.pub_date,
                                 "fetched_at": datetime.now(),
                                 "image_url": article.image_url,
-                                "tags": article.tags
+                                "tags": matched_keywords if matched_keywords else article.tags
                             }
                             
                             # البحث عن source_id الصحيح حسب نوع المصدر
@@ -91,7 +120,7 @@ class ScraperWorker:
                             except:
                                 pass
                     
-                    logger.info(f"📊 نتائج الحفظ: ✅ {saved_count} نجح، ❌ {failed_count} فشل من أصل {len(rss_articles)} مقالة")
+                    logger.info(f"📊 نتائج الحفظ: ✅ {saved_count} نجح، ❌ {failed_count} فشل، 🚫 {filtered_count} تم تصفيتها من أصل {len(rss_articles)} مقالة")
                 else:
                     logger.info("ℹ️ لا توجد أخبار جديدة من RSS")
             except Exception as e:
