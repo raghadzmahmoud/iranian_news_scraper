@@ -28,3 +28,4 @@ news_output.json
 .DS_Store
 .vscode/
 .idea/
+.env.example

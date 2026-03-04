@@ -1,296 +1,765 @@
 """
-كلمات مفتاحية لفلترة أخبار إيران والتصعيد العسكري
-مترجمة للعبرية والإنجليزية والعربية
+كلمات مفتاحية شاملة لفلترة أخبار الحرب بين إيران، إسرائيل، وأمريكا
+Comprehensive keywords for filtering Iran-Israel-US war news
+מילות מפתח מקיפות לסינון חדשות מלחמת איראן-ישראל-ארה"ב
+
+تدعم ثلاث لغات: العربية، الإنجليزية، العبرية
+Supports 3 languages: Arabic, English, Hebrew
 """
 
 import re
 
 
+# ===========================================================================
+# دالة تطبيع النص العربي
+# ===========================================================================
+
 def normalize_arabic(text: str) -> str:
-    """
-    تطبيع النص العربي - إزالة الهمزات والتشكيل
-    
-    Args:
-        text: النص العربي
-        
-    Returns:
-        النص المطبّع
-    """
-    # إزالة التشكيل (الفتحة، الضمة، الكسرة، السكون، إلخ)
+    """إزالة الهمزات والتشكيل من النص العربي"""
     text = re.sub(r'[\u064B-\u065F]', '', text)
-    
-    # توحيد الهمزات
-    text = text.replace('أ', 'ا')  # أ → ا
-    text = text.replace('إ', 'ا')  # إ → ا
-    text = text.replace('آ', 'ا')  # آ → ا
-    text = text.replace('ؤ', 'و')  # ؤ → و
-    text = text.replace('ئ', 'ي')  # ئ → ي
-    text = text.replace('ة', 'ه')  # ة → ه
-    text = text.replace('ى', 'ي')  # ى → ي
-    
-    # إزالة المسافات الزائدة
+    text = text.replace('أ', 'ا').replace('إ', 'ا').replace('آ', 'ا')
+    text = text.replace('ؤ', 'و').replace('ئ', 'ي').replace('ة', 'ه').replace('ى', 'ي')
     text = re.sub(r'\s+', ' ', text).strip()
-    
     return text
 
 
-# الطبقة الأولى: كلمات أساسية (يجب وجود واحدة منها على الأقل)
+# ===========================================================================
+# LAYER 1 — الطبقة الأولى: كلمات أساسية (يكفي وجود واحدة)
+# Core entities — Iran, Israel, USA, key institutions
+# ===========================================================================
+
 LAYER_1_KEYWORDS = {
+
     "ar": [
-        # إيران - جميع الأشكال
-        "إيران", "ايران", "ایران", "إيران",
-        # طهران - جميع الأشكال
+        # ── إيران ──────────────────────────────────────────────────────────
+        "إيران", "ايران", "ایران", "إيراني", "ايراني", "إيرانية", "ايرانية",
+        # ── طهران ──────────────────────────────────────────────────────────
         "طهران", "طهرن", "تهران", "تهرن",
-        # الحرس الثوري
+        # ── الحرس الثوري ───────────────────────────────────────────────────
         "الحرس الثوري", "الحرس الثورى", "حرس ثوري", "حرس ثورى",
+        "الحرس الثوري الإسلامي", "الحرس الثوري الاسلامي",
+        "الحرس الثوري الإيراني", "الحرس الثوري الايراني",
         "IRGC", "irgc",
-        # خامنئي - جميع الأشكال
-        "خامنئي", "خامنئى", "خامنه", "خامنه اي", "خامنهاي",
-        # المرشد الأعلى
+        # ── قوة القدس ──────────────────────────────────────────────────────
+        "قوة القدس", "فيلق القدس", "الحرس الخاص",
+        # ── خامنئي ─────────────────────────────────────────────────────────
+        "خامنئي", "خامنئى", "خامنه اي", "خامنهاي", "علي خامنئي",
+        # ── المرشد الأعلى ──────────────────────────────────────────────────
         "المرشد الأعلى", "المرشد الاعلى", "مرشد أعلى", "مرشد اعلى",
-        # إسرائيل - جميع الأشكال
-        "إسرائيل", "اسرائيل", "إسرائيل", "اسرائيل",
-        # إسرائيلي
-        "إسرائيلي", "اسرائيلي", "إسرائيليين", "اسرائيليين",
+        # ── الرئيس الإيراني ────────────────────────────────────────────────
+        "بزشكيان", "بزشكيان", "مسعود بزشكيان",
+        # ── إسرائيل ────────────────────────────────────────────────────────
+        "إسرائيل", "اسرائيل", "إسرائيلي", "اسرائيلي",
+        "إسرائيليين", "اسرائيليين", "إسرائيلية", "اسرائيلية",
+        # ── الجيش الإسرائيلي ───────────────────────────────────────────────
+        "جيش الدفاع الإسرائيلي", "جيش الدفاع الاسرائيلي",
+        "الجيش الإسرائيلي", "الجيش الاسرائيلي",
+        "IDF", "idf",
+        # ── أمريكا ─────────────────────────────────────────────────────────
+        "الولايات المتحدة", "أمريكا", "امريكا", "أمريكي", "امريكي",
+        "الأمريكيون", "الجيش الأمريكي", "القوات الأمريكية",
+        "USA", "US military", "Pentagon",
+
+        # ── دول الخليج ولبنان ───────────────────────────────────────────────
+        "قطر", "البحرين", "الكويت",
+        "الإمارات", "الامارات", "الإمارات العربية المتحدة",
+        "المملكة العربية السعودية", "السعودية",
+        "سلطنة عُمان", "عُمان", "عمان",
+        "لبنان",
+        "قاعدة العديد", "القواعد الأمريكية", "قواعد أمريكية",
+        "دول الخليج", "دول خليجية",
     ],
-    "en": ["Iran", "Tehran", "IRGC", "Khamenei", "Supreme Leader", "Iranian", "Israel", "Israeli"],
-    "he": ["איראן", "טהראן", "IRGC", "המשמרות המהפכניים", "ח'אמנאי", "המנהיג העליון", "הנהגה איראנית", "ישראל", "ישראלי"]
+
+    "en": [
+        # Iran
+        "Iran", "Iranian", "Tehran",
+        # IRGC
+        "IRGC", "Islamic Revolutionary Guard Corps", "Revolutionary Guards",
+        "Quds Force",
+        # Leadership
+        "Khamenei", "Supreme Leader", "Pezeshkian", "Masoud Pezeshkian",
+        # Israel
+        "Israel", "Israeli", "Israelis",
+        # IDF
+        "IDF", "Israel Defense Forces", "Israeli military", "Israeli army",
+        # USA
+        "United States", "America", "American", "US military",
+        "Pentagon", "White House",
+
+        # ── Gulf states & Lebanon ────────────────────────────────────────────
+        "Qatar", "Bahrain", "Kuwait",
+        "UAE", "United Arab Emirates",
+        "Saudi Arabia",
+        "Oman",
+        "Lebanon",
+        "Al Udeid Air Base", "US bases", "American bases",
+        "Gulf states",
+    ],
+
+    "he": [
+        # איראן
+        "איראן", "איראני", "איראנית",
+        "טהראן", "טהרן",
+        # משמרות המהפכה
+        "IRGC", "משמרות המהפכה", "המשמרות המהפכניים",
+        "כוח קודס", "פילק אל-קודס",
+        # מנהיגות
+        "ח'אמנאי", "המנהיג העליון", "פזשכיאן",
+        # ישראל
+        "ישראל", "ישראלי", "ישראלית",
+        # צה"ל
+        'צה"ל', "צבא ישראל", "הצבא הישראלי",
+        # ארה"ב
+        'ארה"ב', "אמריקה", "אמריקאי", "הצבא האמריקאי",
+        "הפנטגון", "הבית הלבן",
+
+        # ── מדינות המפרץ ולבנון ──────────────────────────────────────────────
+        "קטאר", "בחריין", "כווית",
+        "איחוד האמירויות", "האמירויות",
+        "ערב הסעודית",
+        "עומאן",
+        "לבנון",
+        'בסיס אל-עודיד', "בסיסים אמריקאים",
+        "מדינות המפרץ",
+    ],
 }
 
-# الطبقة الثانية: أسماء العمليات العسكرية
+
+# ===========================================================================
+# LAYER 2 — الطبقة الثانية: أسماء العمليات العسكرية
+# Military operation names — captures news even without mentioning Iran directly
+# ===========================================================================
+
 LAYER_2_KEYWORDS = {
+
     "ar": [
-        # عمليات إسرائيلية
-        "زئير الأسد", "شاغات هآري", "درع يهودا", "الأسد الصاعد",
-        # عمليات أمريكية
-        "الغضب الملحمي", "مطرقة منتصف الليل",
-        # عمليات إيرانية
-        "الوعد الصادق", "الوعد الصادق 4", "فاتح خيبر", "فتح خيبر", "بشارة الفتح"
+        # ── عمليات إسرائيلية ───────────────────────────────────────────────
+        "زئير الأسد", "شاغات هآري",
+        "درع يهودا",
+        "الأسد الصاعد",
+        "أيام التوبة", "يوم الحساب",
+        "السيف الحديدي",
+        "عملية غزة",
+        # ── عمليات أمريكية ─────────────────────────────────────────────────
+        "الغضب الملحمي",
+        "مطرقة منتصف الليل",
+        "حارس الازدهار",
+        "حارس مضيق هرمز",
+        # ── عمليات إيرانية ─────────────────────────────────────────────────
+        "الوعد الصادق", "الوعد الصادق 2", "الوعد الصادق 3", "الوعد الصادق 4",
+        "وعده صادق",
+        "فاتح خيبر", "فتح خيبر",
+        "بشارة الفتح",
     ],
+
     "en": [
         # Israeli operations
-        "Lion's Roar", "Roaring Lion", "Shield of Judah", "Rising Lion",
+        "Lion's Roar", "Roaring Lion",
+        "Shield of Judah",
+        "Rising Lion",
+        "Days of Penitence",
+        "Iron Swords",
         # American operations
-        "Epic Fury", "Midnight Hammer",
+        "Operation Epic Fury", "Epic Fury",
+        "Operation Midnight Hammer", "Midnight Hammer",
+        "Operation Prosperity Guardian", "Prosperity Guardian",
         # Iranian operations
-        "True Promise", "True Promise 4", "Fateh Khyber", "Fatah Khyber", "Besharat al-Fath"
+        "True Promise", "True Promise 2", "True Promise 3", "True Promise 4",
+        "True Promise IV",
+        "Fateh Khyber", "Fatah Khyber",
+        "Besharat al-Fath",
     ],
+
     "he": [
         # עמליות ישראליות
-        "שאגת האריה", "מגן יהודה", "האריה העולה",
+        "שאגת האריה",
+        "מגן יהודה",
+        "האריה העולה",
+        "חרבות ברזל",
+        "ימי תשובה",
         # עמליות אמריקאיות
-        "מבצע זעם אפי", "פטיש חצות",
+        "זעם אפי", "פטיש חצות",
+        "שומר השגשוג",
         # עמליות איראניות
-        "ההבטחה הנאמנה", "ההבטחה הנאמנה 4", "כובש ח'יבר", "בשארת אל-פתח"
-    ]
+        "ההבטחה הנאמנה", "ההבטחה הנאמנה 4",
+        "כובש ח'יבר",
+        "בשארת אל-פתח",
+    ],
 }
 
-# الطبقة الثالثة: سياق موسّع
+
+# ===========================================================================
+# LAYER 3 — الطبقة الثالثة: سياق موسّع
+# Extended context — figures, weapons, locations, diplomatic terms
+# ===========================================================================
+
 LAYER_3_KEYWORDS = {
+
     "ar": [
-        # شخصيات إسرائيلية رئيسية
-        "نتنياهو", "هرتسوغ", "بن غفير", "سموتريتش",
-        # شخصيات عسكرية إسرائيلية
-        "الرمتكال", "رئيس الأركان", "قائد الجيش",
-        # تحالفات وأطراف معنية بالتصعيد (فقط المرتبطة بإيران)
-        "محور المقاومة", "الحوثيون", "أنصار الله", "حزب الله", "كتائب حزب الله", "الحشد الشعبي",
-        # أسلحة إيرانية محددة
-        "صاروخ فتاح", "خيبر شكن", "صواريخ باليستية", "مسيّرات إيرانية",
-        # مصطلحات عسكرية محددة
-        "ضربة استباقية", "ضربة انتقامية", "تصعيد عسكري", "عملية عسكرية",
-        # مواقع جغرافية ذات صلة بالتصعيد
-        "لبنان", "الحدود الشمالية", "الجولان", "سوريا", "العراق",
-        # مصطلحات نووية محددة
-        "البرنامج النووي الإيراني", "تخصيب اليورانيوم", "نطنز", "فوردو"
+
+        # ── شخصيات إيرانية ─────────────────────────────────────────────────
+        "إسماعيل قآني", "اسماعيل قاني", "قائد فيلق القدس",
+        "محمد باقري", "الفريق باقري", "رئيس الأركان الإيراني",
+        "حسين سلامي", "قائد الحرس الثوري",
+        "علي شمخاني", "المجلس الأعلى للأمن القومي",
+        "آية الله", "المرجعية الدينية",
+        "مقر خاتم الأنبياء",
+
+        # ── شخصيات إسرائيلية سياسية ────────────────────────────────────────
+        "نتنياهو", "بنيامين نتنياهو",
+        "هرتسوغ", "إسحاق هرتسوغ",
+        "بن غفير", "إيتمار بن غفير",
+        "سموتريتش", "بتسلئيل سموتريتش",
+        "يسرائيل كاتس", "وزير الدفاع الإسرائيلي",
+
+        # ── شخصيات عسكرية إسرائيلية ────────────────────────────────────────
+        "هرتسي هليفي", "هليفي",
+        "الرمتكال", "رئيس الأركان الإسرائيلي", "قائد الجيش الإسرائيلي",
+        "الناطق باسم الجيش الإسرائيلي",
+        "دانيال هاغاري",
+
+        # ── شخصيات أمريكية ─────────────────────────────────────────────────
+        "ترامب", "دونالد ترامب",
+        "بيت هيغسيث", "وزير الدفاع الأمريكي",
+        "ماركو روبيو", "وزير الخارجية الأمريكي",
+        "جي دي فانس",
+        "الكونغرس الأمريكي",
+
+        # ── وكلاء إيران / محور المقاومة ────────────────────────────────────
+        "محور المقاومة",
+        "الحوثيون", "أنصار الله", "عبد الملك الحوثي",
+        "حزب الله", "حسن نصر الله", "نصر الله",
+        "كتائب حزب الله",
+        "الحشد الشعبي", "هيئة الحشد الشعبي",
+        "فصائل مسلحة عراقية", "فصائل عراقية موالية",
+
+
+        # ── مواقع نووية ────────────────────────────────────────────────────
+        "نطنز", "فوردو", "فُردو",
+        "أصفهان", "بارشين",
+        "قم", "كرج",
+        "كرمانشاه",
+        "دیماونا", "ديمونة", "المفاعل النووي الإسرائيلي",
+
+        # ── مواقع جغرافية استراتيجية ────────────────────────────────────────
+        "مضيق هرمز",
+        "البحر الأحمر",
+        "الخليج العربي", "الخليج الفارسي",
+        "خليج عدن",
+        "بحر العرب",
+        "جيبوتي",
+        "ديغو غارسيا",
+        "قاعدة العديد",
+        "قاعدة عين الأسد",
+        "قاعدة حرير",
+
+        # ── مدن إسرائيلية مستهدفة ───────────────────────────────────────────
+        "تل أبيب", "حيفا", "القدس",
+        "بن غوريون", "مطار بن غوريون",
+        "ديمونة",
+
+        # ── أسلحة إيرانية ──────────────────────────────────────────────────
+        "صاروخ فتاح", "فتاح-1", "فتاح-2",
+        "خيبر شكن",
+        "صاروخ خرمشهر",
+        "عماد", "شهاب", "شهاب-3", "شهاب-6",
+        "سجيل", "قدر",
+        "صواريخ باليستية",
+        "صواريخ فرط صوتية", "هايبرسونيك",
+        "مسيّرات إيرانية", "شاهد-136", "كاميكازي",
+        "منظومة صاروخية إيرانية",
+        "إس-300", "بافار-373",
+
+        # ── أسلحة أمريكية ──────────────────────────────────────────────────
+        "قاذفة B-2", "B-2", "B-52",
+        "قنابل خارقة للتحصينات", "GBU-57", "MOP",
+        "توماهوك",
+        "صواريخ كروز",
+        "حاملة الطائرات",
+        "USS Eisenhower", "USS Truman", "USS Lincoln",
+        "THAAD",
+        "باتريوت",
+
+        # ── أسلحة إسرائيلية ─────────────────────────────────────────────────
+        "القبة الحديدية",
+        "منظومة حيتس", "حيتس-3", "السهم-3",
+        "مقلاع داود",
+        "مقاتلة F-35", "F-35",
+        "F-15", "F-16",
+        "صاروخ دليلة",
+        "صاروخ رامبيدج", "رامبيدج",
+        "JDAM",
+
+        # ── مصطلحات نووية ──────────────────────────────────────────────────
+        "البرنامج النووي الإيراني",
+        "تخصيب اليورانيوم",
+        "اليورانيوم المخصب",
+        "قنبلة نووية", "سلاح نووي",
+        "JCPOA", "الاتفاق النووي", "الاتفاق النووي الإيراني",
+        "وكالة الطاقة الذرية", "IAEA",
+
+        # ── مصطلحات عسكرية عامة ─────────────────────────────────────────────
+        "ضربة استباقية",
+        "ضربة انتقامية",
+        "تصعيد عسكري",
+        "عملية عسكرية",
+        "حرب شاملة",
+        "الرد الإيراني",
+        "الهجوم الإيراني",
+        "تبادل الضربات",
+        "اغتيال", "عملية اغتيال",
+        "حرب الظل",
+        "حرب بالوكالة",
+        "التصعيد الإقليمي",
+        "هجوم بالصواريخ",
+        "القصف",
+        "الدفاع الجوي",
+
+        # ── مصطلحات دبلوماسية وسياسية ──────────────────────────────────────
+        "عقوبات إيران", "العقوبات الإيرانية",
+        "العقوبات الأمريكية",
+        "هدنة", "وقف إطلاق النار",
+        "وساطة", "مفاوضات",
+        "تفعيل آلية الزناد",
+        "snapback",
+        "مجلس الأمن",
+
+        # ── استخبارات ──────────────────────────────────────────────────────
+        "الموساد",
+        "الشاباك",
+        "CIA", "وكالة المخابرات المركزية",
+        "استخبارات إيرانية", "وزارة الاستخبارات الإيرانية",
+
+        # ── مصطلحات بحرية ───────────────────────────────────────────────────
+        "إغلاق مضيق هرمز",
+        "ناقلة نفط",
+        "أسطول المحيط الهندي",
+        "البحرية الأمريكية",
+        "الأسطول الخامس",
+
+        # ── مصطلحات اقتصادية مرتبطة ────────────────────────────────────────
+        "أسعار النفط", "سعر النفط",
+        "أسواق النفط",
+        "أوبك",
+    ],
+
+    "en": [
+
+        # ── Iranian figures ─────────────────────────────────────────────────
+        "Ismail Qaani", "Esmail Qaani", "Quds Force commander",
+        "Mohammad Bagheri", "Iranian Chief of Staff",
+        "Hossein Salami", "IRGC commander",
+        "Ali Shamkhani",
+        "Ayatollah",
+
+        # ── Israeli political figures ────────────────────────────────────────
+        "Netanyahu", "Benjamin Netanyahu",
+        "Herzog", "Isaac Herzog",
+        "Ben Gvir", "Itamar Ben Gvir",
+        "Smotrich", "Bezalel Smotrich",
+        "Israel Katz", "Israeli Defense Minister",
+
+        # ── Israeli military figures ─────────────────────────────────────────
+        "Herzi Halevi", "IDF Chief of Staff",
+        "IDF spokesman", "Daniel Hagari",
+
+        # ── American figures ─────────────────────────────────────────────────
+        "Trump", "Donald Trump",
+        "Pete Hegseth", "Secretary of Defense",
+        "Marco Rubio", "Secretary of State",
+        "JD Vance",
+
+        # ── Iran proxies / Axis of Resistance ───────────────────────────────
+        "Axis of Resistance",
+        "Houthis", "Ansar Allah", "Abdul-Malik al-Houthi",
+        "Hezbollah", "Hassan Nasrallah",
+        "Kataib Hezbollah",
+        "PMF", "PMU", "Popular Mobilization Forces",
+        "Iraqi militias",
+
+
+        # ── Nuclear sites ────────────────────────────────────────────────────
+        "Natanz", "Fordow", "Fordo",
+        "Isfahan", "Esfahan",
+        "Parchin", "Qom", "Karaj",
+        "Dimona", "Israeli nuclear reactor",
+
+        # ── Strategic locations ──────────────────────────────────────────────
+        "Strait of Hormuz",
+        "Red Sea",
+        "Persian Gulf", "Arabian Gulf",
+        "Gulf of Aden",
+        "Arabian Sea",
+        "Diego Garcia",
+        "Al Udeid Air Base",
+        "Al-Asad Air Base",
+
+        # ── Israeli cities targeted ──────────────────────────────────────────
+        "Tel Aviv", "Haifa", "Jerusalem",
+        "Ben Gurion Airport",
+
+        # ── Iranian weapons ──────────────────────────────────────────────────
+        "Fattah missile", "Fattah-1", "Fattah-2",
+        "Kheibar Shekan",
+        "Khorramshahr missile",
+        "Emad", "Shahab", "Shahab-3",
+        "Sejjil", "Qadr",
+        "ballistic missiles",
+        "hypersonic missiles",
+        "Iranian drones", "Shahed-136", "kamikaze drones",
+        "S-300", "Bavar-373",
+
+        # ── American weapons ─────────────────────────────────────────────────
+        "B-2 bomber", "B-52",
+        "bunker busters", "GBU-57", "MOP",
+        "Tomahawk",
+        "cruise missiles",
+        "aircraft carrier",
+        "USS Eisenhower", "USS Truman", "USS Lincoln",
+        "THAAD",
+        "Patriot missile",
+
+        # ── Israeli weapons ──────────────────────────────────────────────────
+        "Iron Dome",
+        "Arrow 3", "Arrow missile",
+        "David's Sling",
+        "F-35", "F-15", "F-16",
+        "Delilah missile",
+        "Rampage missile",
+        "JDAM",
+
+        # ── Nuclear terms ────────────────────────────────────────────────────
+        "Iranian nuclear program", "Iran nuclear deal",
+        "uranium enrichment", "enriched uranium",
+        "nuclear bomb", "nuclear weapon",
+        "JCPOA", "nuclear agreement",
+        "IAEA", "International Atomic Energy Agency",
+        "snapback mechanism",
+
+        # ── Military terms ───────────────────────────────────────────────────
+        "pre-emptive strike", "preemptive attack",
+        "retaliatory strike", "retaliation",
+        "military escalation",
+        "military operation",
+        "all-out war", "full-scale war",
+        "Iranian response", "Iranian attack",
+        "exchange of strikes",
+        "targeted killing", "assassination",
+        "shadow war",
+        "proxy war",
+        "regional escalation",
+        "missile attack",
+        "air defense",
+
+        # ── Diplomatic / political terms ─────────────────────────────────────
+        "Iran sanctions", "sanctions on Iran",
+        "US sanctions",
+        "ceasefire", "truce",
+        "mediation", "negotiations",
+        "snapback",
+        "UN Security Council",
+
+        # ── Intelligence ─────────────────────────────────────────────────────
+        "Mossad",
+        "Shin Bet", "Shabak",
+        "CIA",
+        "Iranian intelligence", "VAJA",
+
+        # ── Naval / maritime ─────────────────────────────────────────────────
+        "Hormuz closure", "close the strait",
+        "oil tanker",
+        "US Navy", "Fifth Fleet",
+        "naval blockade",
+
+        # ── Economic ─────────────────────────────────────────────────────────
+        "oil prices", "crude oil",
+        "oil markets",
+        "OPEC",
+    ],
+
+    "he": [
+
+        # ── דמויות איראניות ──────────────────────────────────────────────────
+        "קאאני", "מפקד כוח קודס",
+        "מוחמד באקרי", "הרמטכ\"ל האיראני",
+        "חוסיין סלאמי", "מפקד המשמרות",
+        "שמח'אני",
+        "איאתולה",
+
+        # ── דמויות פוליטיות ישראליות ────────────────────────────────────────
+        "נתניהו", "בנימין נתניהו",
+        "הרצוג", "יצחק הרצוג",
+        "בן גביר", "איתמר בן גביר",
+        "סמוטריץ'", "בצלאל סמוטריץ'",
+        "ישראל כץ", "שר הביטחון",
+
+        # ── דמויות צבאיות ישראליות ──────────────────────────────────────────
+        'הרמטכ"ל', "הרצי הלוי",
+        "דובר צה\"ל", "דניאל הגרי",
+
+        # ── דמויות אמריקאיות ────────────────────────────────────────────────
+        "טראמפ", "דונלד טראמפ",
+        "פיט הגסת'", "שר הביטחון האמריקאי",
+        "מרקו רוביו", "מזכיר המדינה",
+        "ג'יי די ואנס",
+
+        # ── וכילים של איראן / ציר ההתנגדות ─────────────────────────────────
+        "ציר ההתנגדות",
+        "החות'ים", "אנצאר אללה", "עבד אל-מאלכ אל-חות'י",
+        "חיזבאללה", "חסן נצרללה",
+        "גדודי חיזבאללה",
+        "כוחות עם", "PMF", "PMU", "המיליציות העיראקיות",
+
+
+        # ── אתרים גרעיניים ───────────────────────────────────────────────────
+        "נאטנז", "פורדו",
+        "אספהאן", "פרצ'ין", "קום", "כרג'",
+        "דימונה", "הכור הגרעיני הישראלי",
+
+        # ── מיקומים אסטרטגיים ────────────────────────────────────────────────
+        "מיצר הורמוז",
+        "ים סוף",
+        "המפרץ הפרסי", "המפרץ הערבי",
+        "מפרץ עדן",
+        "ים ערב",
+        "דייגו גרסיה",
+        'בסיס אל-עודיד',
+        "בסיס עין אל-אסד",
+
+        # ── ערים ישראליות שהותקפו ────────────────────────────────────────────
+        "תל אביב", "חיפה", "ירושלים",
+        "שדה התעופה בן גוריון",
+
+        # ── נשקים איראניים ───────────────────────────────────────────────────
+        "טיל פטאח", "פטאח-1", "פטאח-2",
+        "ח'יבר שקן",
+        "טיל ח'ורמשהר",
+        "עמאד", "שהאב", "שהאב-3",
+        "סג'יל", "קאדר",
+        "טילים בליסטיים",
+        "טילים היפרסוניים",
+        "רחפנים איראניים", "שאהד-136", "רחפני קמיקזה",
+        "S-300", "באוואר-373",
+
+        # ── נשקים אמריקאיים ──────────────────────────────────────────────────
+        "מפציץ B-2", "B-52",
+        "פצצות בונקר", "GBU-57", "MOP",
+        "טומהוק",
+        "טילי שיוט",
+        "נושאת מטוסים",
+        "THAAD",
+        "פטריוט",
+
+        # ── נשקים ישראליים ───────────────────────────────────────────────────
+        "כיפת ברזל",
+        "חץ 3", "טיל חץ",
+        "קלע דוד",
+        "F-35", "F-15", "F-16",
+        "טיל דלילה",
+        "טיל רמפידג'",
+        "JDAM",
+
+        # ── מונחים גרעיניים ──────────────────────────────────────────────────
+        "התוכנית הגרעינית האיראנית",
+        "העשרת אורניום", "אורניום מועשר",
+        "פצצה גרעינית", "נשק גרעיני",
+        "JCPOA", "הסכם הגרעין",
+        "IAEA", "הסוכנות לאנרגיה אטומית",
+        "מנגנון ה-snapback",
+
+        # ── מונחים צבאיים ────────────────────────────────────────────────────
+        "תקיפה מונעת", "מתקפה מקדימה",
+        "תקיפת תגמול", "תגמול",
+        "הסלמה צבאית",
+        "מבצע צבאי",
+        "מלחמה כוללת",
+        "התגובה האיראנית", "המתקפה האיראנית",
+        "חילופי מכות",
+        "חיסול", "פעולת חיסול",
+        "מלחמת צללים",
+        "מלחמה בשלוחין",
+        "הסלמה אזורית",
+        "מתקפת טילים",
+        "הגנה אווירית",
+
+        # ── מונחים דיפלומטיים ────────────────────────────────────────────────
+        "סנקציות על איראן", "סנקציות",
+        "הפסקת אש", "שביתת נשק",
+        "גישור", "משא ומתן",
+        "מועצת הביטחון",
+
+        # ── מודיעין ───────────────────────────────────────────────────────────
+        "המוסד",
+        "שב\"כ", "שין בית",
+        "CIA",
+        "המודיעין האיראני",
+
+        # ── ימי / ימאי ────────────────────────────────────────────────────────
+        "סגירת מיצר הורמוז",
+        "מכלית נפט",
+        "הצי האמריקאי", "הצי החמישי",
+
+        # ── כלכלי ────────────────────────────────────────────────────────────
+        "מחיר הנפט", "שוקי הנפט",
+        "אופ\"ק",
+    ],
+}
+
+
+# ===========================================================================
+# كلمات الاستبعاد — False positives
+# ===========================================================================
+
+EXCLUDE_KEYWORDS = {
+    "ar": [
+        "ايران الآن", "إيران اليوم", "إيران الرياضة",
+        "إيران الفن", "إيران إير", "Iran Air",
+        "تيران",        # جزيرة تيران
+        "إيران السياحة",
     ],
     "en": [
-        # Israeli political figures
-        "Netanyahu", "Herzog", "Ben Gvir", "Smotrich",
-        # Israeli military figures
-        "IDF Chief", "Chief of Staff", "Army Commander",
-        # Alliances and parties involved in escalation (Iran-related only)
-        "Axis of Resistance", "Houthis", "Ansar Allah", "Hezbollah", "Kataib Hezbollah", "PMF", "PMU",
-        # Specific Iranian weapons
-        "Fattah missile", "Kheibar Shekan", "ballistic missiles", "Iranian drones",
-        # Specific military terms
-        "pre-emptive strike", "retaliatory strike", "military escalation", "military operation",
-        # Geographic locations related to escalation
-        "Lebanon", "northern border", "Golan", "Syria", "Iraq",
-        # Specific nuclear terms
-        "Iranian nuclear program", "uranium enrichment", "Natanz", "Fordow"
+        "Iran Air", "Iran tourism", "Iran culture",
+        "Iran sports", "Visit Iran",
+        "Tiran",        # Tiran Island
     ],
     "he": [
-        # דמויות פוליטיות ישראליות
-        "נתניהו", "הרצוג", "בן גביר", "סמוטריץ'",
-        # דמויות צבאיות ישראליות
-        "רמטכ\"ל", "ראש הצי", "מפקד הצבא",
-        # ברית וצדדים המעורבים בהסלמה (קשורים לאיראן בלבד)
-        "ציר ההתנגדות", "החות'ים", "אנצאר אללה", "חיזבאללה", "גדודי חיזבאללה", "כוחות עָם", "PMF", "PMU",
-        # נשקים איראניים ספציפיים
-        "טיל פטאח", "ח'יבר שקן", "טילים בליסטיים", "רחפנים איראניים",
-        # מונחים צבאיים ספציפיים
-        "תקיפה מונעת", "תקיפת נקמה", "הסלמה צבאית", "פעולה צבאית",
-        # מיקומים גיאוגרפיים הקשורים להסלמה
-        "לבנון", "הגבול הצפוני", "גולן", "סוריה", "עיראק",
-        # מונחים גרעיניים ספציפיים
-        "התוכנית הגרעינית האיראנית", "העשרת אורניום", "נאטנז", "פורדו"
-    ]
+        "תיירות איראן", "ספורט איראן",
+        "תרבות איראן", "אייר איראן",
+        "טיראן",        # אי טיראן
+    ],
 }
 
-# كلمات يجب استبعادها (false positives)
-EXCLUDE_KEYWORDS = {
-    "ar": ["ايران الآن", "إيران اليوم", "إيران الرياضة", "إيران الفن", "إيران إير", "تيران"],
-    "en": ["Iran Air", "Iran tourism", "Iran culture", "Iran sports"],
-    "he": ["תיירות איראן", "ספורט איראן", "תרבות איראן", "אייר איראן"]
+
+# ===========================================================================
+# هاشتاغات ومصطلحات تريند — Trending hashtags
+# ===========================================================================
+
+TRENDING_HASHTAGS = {
+    "ar": [
+        "#زئير_الأسد", "#الوعد_الصادق", "#الوعد_الصادق_4",
+        "#فاتح_خيبر", "#عملية_الغضب_الملحمي",
+        "#إيران_تحت_القصف", "#ضربة_إيران",
+        "#مطرقة_منتصف_الليل", "#درع_يهودا",
+        "#الأسد_الصاعد",
+    ],
+    "en": [
+        "#LionsRoar", "#EpicFury", "#TruePromise4",
+        "#FatehKhyber", "#IranStrikes", "#IranAttack",
+        "#IranWar", "#IranRetaliation", "#IranIsrael",
+        "#StrikesOnIran", "#MidnightHammer", "#ShieldOfJudah",
+        "#RisingLion", "#OperationEpicFury",
+    ],
+    "he": [
+        "#שאגת_האריה", "#ההבטחה_הנאמנה",
+        "#מגן_יהודה", "#האריה_העולה",
+        "#מבצע_זעם_אפי", "#פטיש_חצות",
+    ],
 }
 
+
+# ===========================================================================
+# دوال الفلترة — Filtering functions
+# ===========================================================================
 
 def is_relevant_article(title: str, content: str, language: str = "he") -> bool:
     """
-    التحقق من أن المقالة متعلقة بإيران والتصعيد العسكري
-    
-    Args:
-        title: عنوان المقالة
-        content: محتوى المقالة
-        language: اللغة (he, en, ar)
-    
-    Returns:
-        True إذا كانت المقالة ذات صلة
+    التحقق من أن المقالة متعلقة بالحرب بين إيران/إسرائيل/أمريكا
+
+    المعادلة:
+        (طبقة_1) OR (طبقة_2) OR (طبقة_3)
+        كلمة واحدة من أي طبقة كافية للقبول
     """
     text = (title + " " + content).lower()
-    
-    # تطبيع النص العربي (إزالة الهمزات والتشكيل)
     if language == "ar":
         text = normalize_arabic(text)
-    
-    # التحقق من الكلمات المستبعدة
-    exclude_words = EXCLUDE_KEYWORDS.get(language, [])
-    for word in exclude_words:
-        if normalize_arabic(word.lower()) in text if language == "ar" else word.lower() in text:
+
+    # فحص الاستبعاد أولاً
+    for word in EXCLUDE_KEYWORDS.get(language, []):
+        w = normalize_arabic(word.lower()) if language == "ar" else word.lower()
+        if w in text:
             return False
-    
-    # الطبقة الأولى: كلمات أساسية (يجب وجود واحدة)
-    layer_1_words = LAYER_1_KEYWORDS.get(language, [])
-    layer_1_match = False
-    for word in layer_1_words:
-        normalized_word = normalize_arabic(word.lower()) if language == "ar" else word.lower()
-        if normalized_word in text:
-            layer_1_match = True
-            break
-    
-    # الطبقة الثانية: أسماء العمليات
-    layer_2_words = LAYER_2_KEYWORDS.get(language, [])
-    layer_2_match = False
-    for word in layer_2_words:
-        normalized_word = normalize_arabic(word.lower()) if language == "ar" else word.lower()
-        if normalized_word in text:
-            layer_2_match = True
-            break
-    
-    # الطبقة الثالثة: سياق موسّع
-    layer_3_words = LAYER_3_KEYWORDS.get(language, [])
-    layer_3_match = False
-    for word in layer_3_words:
-        normalized_word = normalize_arabic(word.lower()) if language == "ar" else word.lower()
-        if normalized_word in text:
-            layer_3_match = True
-            break
-    
-    # المعادلة: (الطبقة_الأولى) OR (الطبقة_الثانية) OR (الطبقة_الثالثة)
-    # كلمة واحدة من أي طبقة كافية
-    return layer_1_match or layer_2_match or layer_3_match
+
+    def match_layer(layer_dict):
+        for word in layer_dict.get(language, []):
+            w = normalize_arabic(word.lower()) if language == "ar" else word.lower()
+            if w in text:
+                return True
+        return False
+
+    return match_layer(LAYER_1_KEYWORDS) \
+        or match_layer(LAYER_2_KEYWORDS) \
+        or match_layer(LAYER_3_KEYWORDS)
 
 
-def get_matching_keywords(title: str, content: str, language: str = "he") -> list:
-    """
-    الحصول على الكلمات المفتاحية المطابقة
-    
-    Args:
-        title: عنوان المقالة
-        content: محتوى المقالة
-        language: اللغة
-    
-    Returns:
-        قائمة الكلمات المطابقة
-    """
+def get_matching_keywords(title: str, content: str, language: str = "he") -> dict:
+    """إرجاع الكلمات المطابقة مقسّمة حسب الطبقة"""
     text = (title + " " + content).lower()
-    
-    # تطبيع النص العربي
     if language == "ar":
         text = normalize_arabic(text)
-    
-    matched = []
-    
-    # البحث في جميع الطبقات
-    all_keywords = (
-        LAYER_1_KEYWORDS.get(language, []) +
-        LAYER_2_KEYWORDS.get(language, []) +
-        LAYER_3_KEYWORDS.get(language, [])
-    )
-    
-    for keyword in all_keywords:
-        normalized_keyword = normalize_arabic(keyword.lower()) if language == "ar" else keyword.lower()
-        if normalized_keyword in text:
-            matched.append(keyword)
-    
-    return matched
+
+    def find_matches(layer_dict):
+        matched = []
+        for word in layer_dict.get(language, []):
+            w = normalize_arabic(word.lower()) if language == "ar" else word.lower()
+            if w in text:
+                matched.append(word)
+        return matched
+
+    return {
+        "layer_1": find_matches(LAYER_1_KEYWORDS),
+        "layer_2": find_matches(LAYER_2_KEYWORDS),
+        "layer_3": find_matches(LAYER_3_KEYWORDS),
+    }
 
 
 def debug_filter(title: str, content: str, language: str = "he") -> dict:
-    """
-    دالة debug لطباعة تفاصيل الفلترة
-    
-    Args:
-        title: عنوان المقالة
-        content: محتوى المقالة
-        language: اللغة
-    
-    Returns:
-        dict بتفاصيل الفلترة
-    """
-    text = (title + " " + content).lower()
-    
-    # تطبيع النص العربي
-    if language == "ar":
-        text = normalize_arabic(text)
-    
-    # التحقق من الكلمات المستبعدة
-    exclude_words = EXCLUDE_KEYWORDS.get(language, [])
-    excluded = []
-    for word in exclude_words:
-        normalized_word = normalize_arabic(word.lower()) if language == "ar" else word.lower()
-        if normalized_word in text:
-            excluded.append(word)
-    
-    # الطبقة الأولى
-    layer_1_words = LAYER_1_KEYWORDS.get(language, [])
-    layer_1_match = []
-    for word in layer_1_words:
-        normalized_word = normalize_arabic(word.lower()) if language == "ar" else word.lower()
-        if normalized_word in text:
-            layer_1_match.append(word)
-    
-    # الطبقة الثانية
-    layer_2_words = LAYER_2_KEYWORDS.get(language, [])
-    layer_2_match = []
-    for word in layer_2_words:
-        normalized_word = normalize_arabic(word.lower()) if language == "ar" else word.lower()
-        if normalized_word in text:
-            layer_2_match.append(word)
-    
-    # الطبقة الثالثة
-    layer_3_words = LAYER_3_KEYWORDS.get(language, [])
-    layer_3_match = []
-    for word in layer_3_words:
-        normalized_word = normalize_arabic(word.lower()) if language == "ar" else word.lower()
-        if normalized_word in text:
-            layer_3_match.append(word)
-    
+    """طباعة تفاصيل الفلترة للتصحيح"""
+    matches = get_matching_keywords(title, content, language)
     return {
         "language": language,
-        "excluded": excluded,
-        "layer_1": layer_1_match,
-        "layer_2": layer_2_match,
-        "layer_3": layer_3_match,
-        "is_relevant": is_relevant_article(title, content, language)
+        "is_relevant": is_relevant_article(title, content, language),
+        **matches,
     }
+
+
+# ===========================================================================
+# إحصائيات — Stats
+# ===========================================================================
+
+def print_stats():
+    """طباعة عدد الكلمات المفتاحية في كل طبقة"""
+    layers = {
+        "Layer 1 (Core)": LAYER_1_KEYWORDS,
+        "Layer 2 (Operations)": LAYER_2_KEYWORDS,
+        "Layer 3 (Extended)": LAYER_3_KEYWORDS,
+    }
+    total = 0
+    for name, layer in layers.items():
+        print(f"\n{name}:")
+        for lang, words in layer.items():
+            print(f"  {lang}: {len(words)} keywords")
+            total += len(words)
+    print(f"\nTotal: {total} keywords across all layers and languages")
+
+
+if __name__ == "__main__":
+    print_stats()
+
+    # ── مثال اختبار ──────────────────────────────────────────────────────
+    test_cases = [
+        ("Iran launches Fattah-2 ballistic missiles at Israel", "", "en"),
+        ("إيران تطلق صواريخ باليستية باتجاه إسرائيل", "", "ar"),
+        ("איראן משגרת טילים בליסטיים לעבר ישראל", "", "he"),
+        ("Operation Midnight Hammer strikes Fordow", "", "en"),
+        ("وعد صادق 4 يستهدف حيفا", "", "ar"),
+        ("Iran Air announces new routes", "", "en"),   # should be False
+    ]
+
+    print("\n── Test Results ──")
+    for title, content, lang in test_cases:
+        result = debug_filter(title, content, lang)
+        status = "✅ RELEVANT" if result["is_relevant"] else "❌ EXCLUDED"
+        all_matches = result["layer_1"] + result["layer_2"] + result["layer_3"]
+        print(f"{status} [{lang}] {title}")
+        if all_matches:
+            print(f"   Matched: {all_matches[:5]}")

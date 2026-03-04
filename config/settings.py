@@ -65,6 +65,7 @@ ALLOWED_VIDEO_FORMATS = os.getenv('ALLOWED_VIDEO_FORMATS', 'mp4,avi,mov,mkv,webm
 # Scraper Configuration
 # ============================================
 MAX_ITEMS_PER_SOURCE = int(os.getenv("MAX_ITEMS_PER_SOURCE", 5))
+SCRAPER_MAX_ITEMS = int(os.getenv("SCRAPER_MAX_ITEMS", 10))
 FETCH_FULL_ARTICLE = os.getenv("FETCH_FULL_ARTICLE", "true").lower() == "true"
 DELAY_BETWEEN_REQUESTS = float(os.getenv("DELAY_BETWEEN_REQUESTS", 1.5))
 OUTPUT_FILE = os.getenv("OUTPUT_FILE", "news_output.json")

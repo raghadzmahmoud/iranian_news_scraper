@@ -36,12 +36,13 @@ class DatabaseConnection:
     def get_sources(self):
         """جلب المصادر من قاعدة البيانات"""
         try:
-            self.cursor.execute("SELECT id, url, active FROM public.sources WHERE is_active = true")
+            self.cursor.execute("SELECT id, url, is_active FROM public.sources WHERE is_active = true")
             sources = self.cursor.fetchall()
             logger.info(f"✅ تم جلب {len(sources)} مصدر من قاعدة البيانات")
             return sources
         except psycopg2.Error as e:
             logger.error(f"❌ خطأ في جلب المصادر: {e}")
+            self.conn.rollback()
             return []
 
     def get_telegram_sources(self):
@@ -57,16 +58,18 @@ class DatabaseConnection:
             return sources
         except psycopg2.Error as e:
             logger.error(f"❌ خطأ في جلب مصادر Telegram: {e}")
+            self.conn.rollback()
             return []
 
     def url_exists(self, url: str) -> bool:
         """التحقق من وجود URL في قاعدة البيانات"""
         try:
-            self.cursor.execute("SELECT 1 FROM public.raw_data WHERE url = %s LIMIT 1", (url,))
+            self.cursor.execute("SELECT 1 FROM public.raw_news WHERE url = %s LIMIT 1", (url,))
             result = self.cursor.fetchone()
             return result is not None
         except psycopg2.Error as e:
             logger.error(f"❌ خطأ في التحقق من URL: {e}")
+            self.conn.rollback()
             return False
 
     def update_article_relevance(self, raw_data_id: int, is_relevant: bool, matched_keywords: list = None):
@@ -89,30 +92,25 @@ class DatabaseConnection:
             return False
 
     def insert_raw_data(self, source_id: int, article_data: dict):
-        """إدراج البيانات الخام في جدول raw_data"""
+        """إدراج البيانات الخام في جدول raw_news"""
         try:
-            # دمج النص الكامل والملخص
-            content = article_data.get("full_text") or article_data.get("summary", "")
-            
             query = """
-                INSERT INTO public.raw_data 
-                (source_id, url, content, published_at, fetched_at, is_processed, 
-                 media_url, stt_status, source_type_id, tags)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO public.raw_news 
+                (source_id, url, title_original, content_original, language_id, published_at, fetched_at, processing_status, has_numbers)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (url) DO NOTHING
                 RETURNING id
             """
             self.cursor.execute(query, (
                 source_id,
                 article_data.get("url"),
-                content,
+                article_data.get("title", ""),
+                article_data.get("full_text") or article_data.get("summary", ""),
+                1,  # language_id: 1 = عربي
                 article_data.get("pub_date"),
-                article_data.get("fetched_at"),
-                False,  # is_processed
-                article_data.get("image_url"),
-                "not_needed",  # stt_status - نصوص فقط، لا تحتاج speech-to-text
-                1,  # source_type_id (RSS)
-                ",".join(article_data.get("tags", [])) if article_data.get("tags") else None,
+                datetime.now(),
+                0,  # processing_status: 0 = جديد
+                False,  # has_numbers
             ))
             
             result = self.cursor.fetchone()

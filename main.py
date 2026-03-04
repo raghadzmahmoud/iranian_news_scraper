@@ -8,12 +8,11 @@ from datetime import datetime
 from config.settings import (
     MAX_ITEMS_PER_SOURCE,
     FETCH_FULL_ARTICLE,
-    DELAY_BETWEEN_REQUESTS,
-    FEEDS
+    DELAY_BETWEEN_REQUESTS
 )
 from config.keywords import is_relevant_article, get_matching_keywords, debug_filter
 from database.connection import db
-from scrapers.rss_scraper import parse_rss
+from scrapers.rss_scraper import parse_rss, load_rss_sources
 from scrapers.article_scraper import scrape_full_article
 from scrapers.telegram_scraper import telegram_scraper
 from storage.database_storage import save_raw_data_to_db
@@ -35,14 +34,22 @@ def scrape_all_news(sources: list[str] = None, db_connection=None) -> list:
     # استخدام الـ connection المعطاة أو الـ global db
     db_obj = db_connection if db_connection is not None else db
     
+    # تحميل المصادر من JSON
+    all_sources = load_rss_sources()
+    
     if sources is None:
-        sources = list(FEEDS.keys())
+        sources = [s for s in all_sources.keys() if all_sources[s].get("enabled", True)]
 
     all_articles = []
 
     for source_key in sources:
-        if source_key not in FEEDS:
+        if source_key not in all_sources:
             logger.warning(f"⚠️  مصدر غير معروف: {source_key}")
+            continue
+        
+        source = all_sources[source_key]
+        if not source.get("enabled", True):
+            logger.info(f"⏭️  تخطي المصدر المعطل: {source['name']}")
             continue
 
         # قراءة RSS
@@ -57,7 +64,7 @@ def scrape_all_news(sources: list[str] = None, db_connection=None) -> list:
                 logger.info(f"⏭️  تخطي (موجودة): {article.title[:40]}...")
         
         if not new_articles:
-            logger.info(f"ℹ️  لا توجد أخبار جديدة من {FEEDS[source_key]['name']}")
+            logger.info(f"ℹ️  لا توجد أخبار جديدة من {source['name']}")
             continue
 
         # سحب المقال الكامل فقط للأخبار الجديدة
