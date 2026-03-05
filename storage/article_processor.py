@@ -78,9 +78,6 @@ class ArticleProcessor:
             
             # التحقق من الحد الأدنى للكلمات (300 كلمة)
             word_count = len(content.split())
-            if word_count < 300:
-                logger.info(f"⏭️  المقالة أقل من 300 كلمة ({word_count} كلمة)")
-                return None
             
             # كشف اللغة
             language = ArticleProcessor.detect_language(title + " " + content)
@@ -96,6 +93,22 @@ class ArticleProcessor:
             # التحقق من وجود أرقام
             has_numbers_flag = ArticleProcessor.has_numbers(content)
             
+            # إذا كانت المقالة أقل من 300 كلمة، ضعها في warning
+            if word_count < 300:
+                logger.warning(f"⚠️  المقالة أقل من 300 كلمة ({word_count} كلمة) - سيتم حفظها في warning")
+                return {
+                    'source_id': source_id,
+                    'title': title,
+                    'content': content,
+                    'language': language,
+                    'has_numbers': has_numbers_flag,
+                    'matching_keywords': matching_keywords,
+                    'published_at': article.pub_date,
+                    'url': article.url,
+                    'is_warning': True,  # علامة أنها مقالة قصيرة
+                    'word_count': word_count
+                }
+            
             logger.info(f"✅ المقالة تمر الفلترة")
             logger.info(f"   الكلمات: {word_count}")
             logger.info(f"   اللغة: {language}")
@@ -109,7 +122,9 @@ class ArticleProcessor:
                 'has_numbers': has_numbers_flag,
                 'matching_keywords': matching_keywords,
                 'published_at': article.pub_date,
-                'url': article.url
+                'url': article.url,
+                'is_warning': False,
+                'word_count': word_count
             }
         
         except Exception as e:
@@ -136,6 +151,7 @@ class ArticleProcessor:
             'saved': 0,
             'skipped': 0,
             'errors': 0,
+            'warnings': 0,  # مقالات قصيرة
             'by_language': {},
             'with_numbers': 0
         }
@@ -174,6 +190,11 @@ class ArticleProcessor:
                 if result:
                     stats['saved'] += 1
                     logger.info(f"✅ تم حفظ المقالة برقم: {result}")
+                    
+                    # إذا كانت مقالة قصيرة، سجلها في warning
+                    if processed.get('is_warning'):
+                        stats['warnings'] += 1
+                        logger.warning(f"⚠️  مقالة قصيرة ({processed.get('word_count')} كلمة) محفوظة برقم: {result}")
                 else:
                     stats['skipped'] += 1
             
@@ -187,6 +208,7 @@ class ArticleProcessor:
         logger.info(f"   تم الحفظ: {stats['saved']}")
         logger.info(f"   موجودة: {stats['skipped']}")
         logger.info(f"   أخطاء: {stats['errors']}")
+        logger.info(f"   مقالات قصيرة: {stats['warnings']}")
         logger.info(f"   مع أرقام: {stats['with_numbers']}")
         logger.info(f"   حسب اللغة: {stats['by_language']}")
         
@@ -212,6 +234,7 @@ class ArticleProcessor:
             'total_saved': 0,
             'total_skipped': 0,
             'total_errors': 0,
+            'total_warnings': 0,  # مقالات قصيرة
             'total_with_numbers': 0,
             'by_language': {},
             'by_source': {}
@@ -226,6 +249,7 @@ class ArticleProcessor:
                 total_stats['total_saved'] += stats['saved']
                 total_stats['total_skipped'] += stats['skipped']
                 total_stats['total_errors'] += stats['errors']
+                total_stats['total_warnings'] += stats.get('warnings', 0)
                 total_stats['total_with_numbers'] += stats['with_numbers']
                 
                 # تجميع إحصائيات اللغة
@@ -243,6 +267,7 @@ class ArticleProcessor:
         logger.info(f"   إجمالي المقالات: {total_stats['total_articles']}")
         logger.info(f"   تم الفلترة: {total_stats['total_filtered']}")
         logger.info(f"   تم الحفظ: {total_stats['total_saved']}")
+        logger.info(f"   مقالات قصيرة: {total_stats['total_warnings']}")
         logger.info(f"   مع أرقام: {total_stats['total_with_numbers']}")
         logger.info(f"   حسب اللغة: {total_stats['by_language']}")
         

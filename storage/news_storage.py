@@ -39,12 +39,26 @@ class NewsStorage:
                 db.connect()
             
             cursor = db.conn.cursor()
-            query = "SELECT 1 FROM public.raw_news WHERE url = %s LIMIT 1"
-            cursor.execute(query, (url,))
+            
+            # تنظيف URL من المعاملات الإضافية
+            clean_url = url.split('?')[0].split('#')[0] if url else ""
+            
+            # البحث عن URL دقيق أو URL بدون معاملات
+            query = """
+                SELECT 1 FROM public.raw_news 
+                WHERE url = %s 
+                OR url LIKE %s
+                LIMIT 1
+            """
+            cursor.execute(query, (url, clean_url + '%'))
             result = cursor.fetchone()
             cursor.close()
             
-            return result is not None
+            if result:
+                logger.info(f"⏭️  URL موجود بالفعل: {url[:60]}")
+                return True
+            
+            return False
         
         except Exception as e:
             logger.error(f"❌ خطأ في التحقق من URL: {e}")
@@ -63,6 +77,13 @@ class NewsStorage:
         
         Returns:
             معرّف المقالة المحفوظة أو None
+        
+        ملاحظة:
+            processing_status يتم تعيينه تلقائياً بناءً على اللغة:
+            - 1 = عربي أصلي (جاهز للنشر)
+            - 0 = أجنبي (يحتاج ترجمة)
+            
+            بعد الترجمة، يتم تحديثه إلى 1 باستخدام update_translated_status_job
         """
         try:
             if not db.conn:
@@ -74,13 +95,24 @@ class NewsStorage:
             language_code = article_data.get('language', 'ar')
             language_id = NewsStorage.get_language_id(language_code)
             
+            # الحصول على URL
+            url = article_data.get('url', '')
+            if not url:
+                logger.warning(f"⚠️  المقالة بدون URL")
+                return None
+            
             # التحقق من وجود URL
-            if NewsStorage.url_exists(article_data.get('url')):
-                logger.info(f"⏭️  المقالة موجودة بالفعل: {article_data.get('url')[:50]}")
+            if NewsStorage.url_exists(url):
+                logger.info(f"⏭️  المقالة موجودة بالفعل: {url[:50]}")
                 return None
             
             # الحصول على has_numbers
             has_numbers = article_data.get('has_numbers', False)
+            
+            # تحديد processing_status بناءً على اللغة
+            # 1 = عربي أصلي أو مترجم (جاهز للنشر)
+            # 0 = أجنبي (يحتاج ترجمة)
+            processing_status = 1 if language_code == 'ar' else 0
             
             # إدراج المقالة
             query = """
@@ -92,13 +124,13 @@ class NewsStorage:
             
             cursor.execute(query, (
                 source_id,
-                article_data.get('url'),
+                url,
                 article_data.get('title', ''),
                 article_data.get('content', ''),
                 language_id,
                 article_data.get('published_at'),
                 datetime.now(),
-                0,  # processing_status: 0 = جديد (لم يتم المعالجة)
+                processing_status,  # 1 للعربي، 0 للأجنبي
                 has_numbers
             ))
             
@@ -107,14 +139,14 @@ class NewsStorage:
             
             if result:
                 article_id = result[0]
-                logger.info(f"✅ تم حفظ المقالة برقم: {article_id}")
+                logger.info(f"✅ تم حفظ المقالة برقم: {article_id} - URL: {url[:50]}")
                 return article_id
             
             return None
         
-        except psycopg2.IntegrityError:
+        except psycopg2.IntegrityError as e:
             db.conn.rollback()
-            logger.info(f"⏭️  المقالة موجودة بالفعل")
+            logger.warning(f"⏭️  المقالة موجودة بالفعل (Integrity Error): {str(e)[:50]}")
             return None
         
         except Exception as e:
@@ -123,7 +155,8 @@ class NewsStorage:
             return None
         
         finally:
-            cursor.close()
+            if cursor:
+                cursor.close()
     
     @staticmethod
     def save_articles_batch(source_id: int, articles: list) -> int:

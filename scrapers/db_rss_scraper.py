@@ -5,6 +5,8 @@ import requests
 from bs4 import BeautifulSoup
 import feedparser
 from datetime import datetime
+from email.utils import parsedate_to_datetime
+from dateutil import parser as date_parser
 from models.article import NewsArticle
 from database.connection import db
 from storage.news_storage import NewsStorage
@@ -115,8 +117,32 @@ def parse_rss_from_db(source_id: int, max_items: int = 10) -> list[NewsArticle]:
                     summary = soup.get_text(separator=' ', strip=True)
                 
                 pub_date = None
+                # محاولة استخراج تاريخ النشر من عدة حقول
                 if entry.get('published_parsed'):
                     pub_date = datetime(*entry.published_parsed[:6])
+                elif entry.get('updated_parsed'):
+                    pub_date = datetime(*entry.updated_parsed[:6])
+                elif entry.get('pubDate'):
+                    # محاولة تحليل pubDate كنص
+                    try:
+                        pub_date = parsedate_to_datetime(entry.get('pubDate'))
+                    except:
+                        pub_date = None
+                elif entry.get('dc_date'):
+                    # محاولة تحليل dc:date (من DW وغيرها)
+                    try:
+                        pub_date = date_parser.parse(entry.get('dc_date'))
+                    except:
+                        pub_date = None
+                elif entry.get('date'):
+                    # محاولة تحليل date العام
+                    try:
+                        pub_date = date_parser.parse(entry.get('date'))
+                    except:
+                        pub_date = None
+                
+                if not pub_date:
+                    logger.warning(f"⚠️  لم يتم العثور على تاريخ نشر للمقالة: {title[:50]}")
                 
                 article = NewsArticle(
                     title=title,

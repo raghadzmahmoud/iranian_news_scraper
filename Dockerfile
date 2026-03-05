@@ -23,5 +23,5 @@ COPY . .
 # متغيرات البيئة الافتراضية
 ENV PYTHONUNBUFFERED=1
 
-# أمر التشغيل للـ Worker
-CMD ["python", "worker.py"]
+# أمر التشغيل للـ Worker المتوازي
+CMD ["python", "worker_parallel_advanced.py"]

@@ -142,42 +142,60 @@ class NewsTranslator:
                 return {"success": 0, "failed": 0, "skipped": len(raw_news_ids)}
 
             # Prepare texts for translation
-            texts_to_translate = [
-                f"Title: {article['title_original']}\n\nContent: {article['content_original']}" 
-                if isinstance(article, dict)
-                else f"Title: {article[1]}\n\nContent: {article[2]}"
-                for article in articles
-            ]
-
-            logger.info(f"Starting translation of {len(texts_to_translate)} articles")
+            # إرسال العنوان والمحتوى بشكل منفصل للترجمة
+            articles_data = []
+            for article in articles:
+                if isinstance(article, dict):
+                    articles_data.append({
+                        'id': article['id'],
+                        'title': article['title_original'],
+                        'content': article['content_original'],
+                        'lang_id': article['language_id']
+                    })
+                else:
+                    articles_data.append({
+                        'id': article[0],
+                        'title': article[1],
+                        'content': article[2],
+                        'lang_id': article[3]
+                    })
+            
+            # ترجمة العناوين والمحتوى بشكل منفصل
+            titles_to_translate = [a['title'] for a in articles_data]
+            contents_to_translate = [a['content'] for a in articles_data]
+            
+            logger.info(f"Starting translation of {len(articles_data)} articles")
 
             # Translate with bounded concurrency
-            translations = await self.translate_batch(texts_to_translate)
+            translated_titles = await self.translate_batch(titles_to_translate)
+            translated_contents = await self.translate_batch(contents_to_translate)
 
             # Store translations in database
             success_count = 0
             failed_count = 0
+            updated_status_count = 0
 
-            for article, translation in zip(articles, translations):
-                # Handle both dict and tuple formats
-                if isinstance(article, dict):
-                    raw_news_id = article['id']
-                    title_original = article['title_original']
-                    content_original = article['content_original']
-                    lang_id = article['language_id']
-                else:
-                    raw_news_id, title_original, content_original, lang_id = article
+            for article_data, translated_title, translated_content in zip(articles_data, translated_titles, translated_contents):
+                raw_news_id = article_data['id']
 
-                if not translation:
+                if not translated_title or not translated_content:
                     failed_count += 1
                     continue
 
-                # Parse translated title and content
-                parts = translation.split("\n\n", 1)
-                translated_title = (
-                    parts[0].replace("Title: ", "").strip() if len(parts) > 0 else ""
-                )
-                translated_content = parts[1].strip() if len(parts) > 1 else ""
+                # تنظيف الترجمة من البادئات غير المرغوبة
+                translated_title = translated_title.strip()
+                translated_content = translated_content.strip()
+                
+                # إزالة البادئات إذا كانت موجودة
+                if translated_title.startswith("Title:"):
+                    translated_title = translated_title.replace("Title:", "", 1).strip()
+                if translated_title.startswith("العنوان:"):
+                    translated_title = translated_title.replace("العنوان:", "", 1).strip()
+                
+                if translated_content.startswith("Content:"):
+                    translated_content = translated_content.replace("Content:", "", 1).strip()
+                if translated_content.startswith("المحتوى:"):
+                    translated_content = translated_content.replace("المحتوى:", "", 1).strip()
 
                 try:
                     # Check if translation already exists
@@ -222,6 +240,7 @@ class NewsTranslator:
                         )
 
                     # Update processing_status to 1 (true) after successful translation
+                    # 1 = جاهز للنشر (Ready for publishing)
                     db.cursor.execute(
                         """
                         UPDATE raw_news
@@ -230,9 +249,15 @@ class NewsTranslator:
                         """,
                         (raw_news_id,),
                     )
+                    
+                    # التحقق من أن التحديث تم بنجاح
+                    if db.cursor.rowcount > 0:
+                        updated_status_count += 1
+                        logger.info(f"✅ تم حفظ الترجمة للخبر {raw_news_id} وتحديث الحالة إلى 1 (جاهز للنشر)")
+                    else:
+                        logger.warning(f"⚠️  لم يتم تحديث الحالة للخبر {raw_news_id}")
 
                     success_count += 1
-                    logger.info(f"Stored translation for raw_news_id: {raw_news_id} and marked as processed")
 
                 except Exception as e:
                     logger.error(f"Failed to store translation for {raw_news_id}: {e}")
@@ -240,9 +265,9 @@ class NewsTranslator:
 
             db.conn.commit()
             logger.info(
-                f"Translation complete: {success_count} success, {failed_count} failed"
+                f"✅ انتهت الترجمة: {success_count} نجح، {failed_count} فشل، {updated_status_count} تم تحديث الحالة"
             )
-            return {"success": success_count, "failed": failed_count, "total": len(articles)}
+            return {"success": success_count, "failed": failed_count, "status_updated": updated_status_count, "total": len(articles)}
 
         except Exception as e:
             logger.error(f"Translation batch error: {e}")
