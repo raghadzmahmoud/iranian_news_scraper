@@ -5,6 +5,7 @@ import re
 from config.keywords import is_relevant_article, get_matching_keywords
 from storage.news_storage import NewsStorage
 from utils.logger import logger
+from utils.number_detector import NumberDetector
 
 
 class ArticleProcessor:
@@ -41,19 +42,19 @@ class ArticleProcessor:
     @staticmethod
     def has_numbers(text: str) -> bool:
         """
-        التحقق من وجود أرقام في النص
+        التحقق من وجود أرقام في النص (محسّن)
+        يدعم العربية والإنجليزية والعبرية مع المثنى والجمع
+        والسياق الحربي
         
         Returns:
-            True إذا كان هناك أرقام
+            True إذا كان هناك أرقام، False وإلا
         """
         if not text:
             return False
         
-        # البحث عن أرقام عربية أو إنجليزية
-        has_english_numbers = bool(re.search(r'\d', text))
-        has_arabic_numbers = bool(re.search(r'[٠-٩]', text))
-        
-        return has_english_numbers or has_arabic_numbers
+        # استخدام الكاشف المحسّن
+        result = NumberDetector.detect_numbers(text, use_war_context=True)
+        return result['has_numbers']
     
     @staticmethod
     def filter_and_process(source_id: int, article) -> dict:
