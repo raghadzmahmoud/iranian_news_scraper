@@ -28,4 +28,8 @@ news_output.json
 .DS_Store
 .vscode/
 .idea/
-.env.example
+
+# X (Twitter) Scraper
+x_cookies.json
+x_scraper_stats_*.json
+tweets_output.json

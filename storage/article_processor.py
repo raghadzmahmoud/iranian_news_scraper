@@ -57,6 +57,25 @@ class ArticleProcessor:
         return result['has_numbers']
     
     @staticmethod
+    def is_x_source(source_id: int) -> bool:
+        """التحقق من أن المصدر هو X (Twitter)"""
+        try:
+            from database.connection import db
+            if not db.conn:
+                db.connect()
+            
+            cursor = db.conn.cursor()
+            query = "SELECT source_type_id FROM public.sources WHERE id = %s"
+            cursor.execute(query, (source_id,))
+            result = cursor.fetchone()
+            cursor.close()
+            
+            # source_type_id = 7 هو X (Twitter)
+            return result and result[0] == 7
+        except Exception:
+            return False
+    
+    @staticmethod
     def filter_and_process(source_id: int, article) -> dict:
         """
         فلترة ومعالجة مقالة واحدة
@@ -94,8 +113,11 @@ class ArticleProcessor:
             # التحقق من وجود أرقام
             has_numbers_flag = ArticleProcessor.has_numbers(content)
             
-            # إذا كانت المقالة أقل من 300 كلمة، ضعها في warning
-            if word_count < 300:
+            # التحقق من نوع المصدر
+            is_x_source = ArticleProcessor.is_x_source(source_id)
+            
+            # إذا كانت المقالة أقل من 300 كلمة ولم تكن من X، ضعها في warning
+            if word_count < 300 and not is_x_source:
                 logger.warning(f"⚠️  المقالة أقل من 300 كلمة ({word_count} كلمة) - سيتم حفظها في warning")
                 return {
                     'source_id': source_id,
@@ -110,10 +132,13 @@ class ArticleProcessor:
                     'word_count': word_count
                 }
             
+            # التغريدات من X أو المقالات الطويلة تمر بدون warning
             logger.info(f"✅ المقالة تمر الفلترة")
             logger.info(f"   الكلمات: {word_count}")
             logger.info(f"   اللغة: {language}")
             logger.info(f"   أرقام: {'نعم' if has_numbers_flag else 'لا'}")
+            if is_x_source:
+                logger.info(f"   المصدر: X (Twitter)")
             
             return {
                 'source_id': source_id,

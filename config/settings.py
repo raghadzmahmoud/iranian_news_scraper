@@ -71,6 +71,16 @@ DELAY_BETWEEN_REQUESTS = float(os.getenv("DELAY_BETWEEN_REQUESTS", 1.5))
 OUTPUT_FILE = os.getenv("OUTPUT_FILE", "news_output.json")
 
 # ============================================
+# X (Twitter) Scraper Configuration
+# ============================================
+X_AUTH_TOKEN = os.getenv("X_AUTH_TOKEN", "")
+X_CT0_TOKEN = os.getenv("X_CT0_TOKEN", "")
+X_MAX_TWEETS_PER_ACCOUNT = int(os.getenv("X_MAX_TWEETS_PER_ACCOUNT", 20))
+X_DELAY_BETWEEN_ACCOUNTS = int(os.getenv("X_DELAY_BETWEEN_ACCOUNTS", 3))
+X_DEBUG = os.getenv("X_DEBUG", "true").lower() == "true"
+X_COOKIES_FILE = "x_cookies.json"
+
+# ============================================
 # Logging Configuration
 # ============================================
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
