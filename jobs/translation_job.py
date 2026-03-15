@@ -2,7 +2,7 @@ import asyncio
 import logging
 from datetime import datetime
 from services.translation.translator import NewsTranslator
-from database.connection import DatabaseConnection
+from database.connection import db
 import os
 
 logger = logging.getLogger(__name__)
@@ -21,10 +21,11 @@ class TranslationJob:
 
         translator = NewsTranslator(api_key=self.api_key, max_concurrent=self.max_concurrent)
 
-        db = DatabaseConnection()
-        if not db.connect():
-            logger.error("Failed to connect to database")
-            return {"status": "error", "message": "Database connection failed"}
+        # استخدام الاتصال المشترك بدلاً من إنشاء واحد جديد
+        if not db.conn:
+            if not db.connect():
+                logger.error("Failed to connect to database")
+                return {"status": "error", "message": "Database connection failed"}
 
         try:
             # Get pending articles (language_id 2=Hebrew, 3=English)
@@ -63,8 +64,6 @@ class TranslationJob:
         except Exception as e:
             logger.error(f"Translation job error: {e}")
             return {"status": "error", "message": str(e)}
-        finally:
-            db.close()
 
 
 async def run_translation_job():

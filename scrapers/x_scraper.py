@@ -468,10 +468,8 @@ async def main():
         
         logger.info(f"\n💾 الإحصائيات محفوظة في: {output_file}")
     
-    finally:
-        # إغلاق الاتصال
-        if db.conn:
-            db.close()
+    except Exception as e:
+        logger.error(f"❌ خطأ: {e}")
 
 
 if __name__ == "__main__":

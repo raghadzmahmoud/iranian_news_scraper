@@ -14,7 +14,7 @@ async def run_x_scraper_job():
     logger.info("🐦 بدء وظيفة سحب X...")
     
     try:
-        # الاتصال بقاعدة البيانات
+        # الاتصال بقاعدة البيانات (بدون إغلاق في النهاية)
         if not db.conn:
             db.connect()
         
@@ -30,10 +30,7 @@ async def run_x_scraper_job():
         logger.error(f"❌ خطأ في وظيفة سحب X: {e}")
         return None
     
-    finally:
-        # إغلاق الاتصال
-        if db.conn:
-            db.close()
+    # لا نُغلق الاتصال هنا - يبقى مفتوح للـ workers الأخرى
 
 
 def sync_run_x_scraper_job():
