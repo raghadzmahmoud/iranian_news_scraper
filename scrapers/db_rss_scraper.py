@@ -4,6 +4,7 @@
 import requests
 from bs4 import BeautifulSoup
 import feedparser
+import asyncio
 from datetime import datetime
 from email.utils import parsedate_to_datetime
 from dateutil import parser as date_parser
@@ -23,7 +24,7 @@ def load_rss_sources_from_db() -> dict:
         
         cursor = db.conn.cursor()
         query = """
-            SELECT s.id, s.url, st.name as type, s.is_active
+            SELECT s.id, s.url, st.name as type, s.is_active, s.name, s.source_type_id
             FROM public.sources s
             JOIN public.source_types st ON s.source_type_id = st.id
             WHERE s.is_active = true
@@ -40,7 +41,9 @@ def load_rss_sources_from_db() -> dict:
                 'id': source_id,
                 'url': row[1],
                 'type': row[2],
-                'active': row[3]
+                'active': row[3],
+                'name': row[4],
+                'source_type_id': row[5]
             }
         
         logger.info(f"✅ تم تحميل {len(sources)} مصدر من قاعدة البيانات")
@@ -53,30 +56,29 @@ def load_rss_sources_from_db() -> dict:
         return {}
 
 
-def get_source_type_from_db(source_id: int) -> str:
-    """الحصول على نوع المصدر من قاعدة البيانات"""
+def get_source_type_id_from_db(source_id: int) -> int:
+    """الحصول على نوع المصدر (ID) من قاعدة البيانات - 6=RSS, 7=X"""
     try:
         if not db.conn:
             db.connect()
         
         cursor = db.conn.cursor()
         query = """
-            SELECT st.name
-            FROM public.sources s
-            JOIN public.source_types st ON s.source_type_id = st.id
-            WHERE s.id = %s
+            SELECT source_type_id
+            FROM public.sources
+            WHERE id = %s
         """
         cursor.execute(query, (source_id,))
         result = cursor.fetchone()
         cursor.close()
         
-        return result[0] if result else "rss_only"
+        return result[0] if result else -1
     
     except Exception as e:
         logger.error(f"❌ خطأ في الحصول على نوع المصدر: {e}")
         if db.conn:
             db.conn.rollback()
-        return "rss_only"
+        return -1
 
 
 def parse_rss_from_db(source_id: int, max_items: int = 10) -> list[NewsArticle]:
@@ -102,12 +104,19 @@ def parse_rss_from_db(source_id: int, max_items: int = 10) -> list[NewsArticle]:
             return []
         
         articles = []
+        skipped_count = 0
         
         for entry in feed.entries[:max_items]:
             try:
                 title = entry.get('title', 'بدون عنوان')
                 url = entry.get('link', '')
                 summary = entry.get('summary', '')
+                
+                # شرط خاص للمصدر 17 (Annahar): تخطي المقالات اللي فيها "opinion" في الـ URL
+                if source_id == 17 and 'opinion' in url.lower():
+                    logger.info(f"⏭️  تم تخطي مقالة opinion من المصدر 17: {title[:50]}")
+                    skipped_count += 1
+                    continue
                 
                 # إزالة الـ HTML tags من الملخص
                 if summary:
@@ -159,6 +168,8 @@ def parse_rss_from_db(source_id: int, max_items: int = 10) -> list[NewsArticle]:
                 continue
         
         logger.info(f"✅ تم تحليل {len(articles)} مقالة من RSS")
+        if skipped_count > 0:
+            logger.info(f"⏭️  تم تخطي {skipped_count} مقالة opinion من المصدر 17")
         return articles
     
     except Exception as e:
@@ -245,39 +256,64 @@ def scrape_full_article_from_db(article: NewsArticle, source_id: int) -> NewsArt
 
 
 def smart_scrape_from_db(source_id: int, max_items: int = 10) -> list[NewsArticle]:
-    """سحب ذكي من قاعدة البيانات بناءً على نوع المصدر"""
-    source_type = get_source_type_from_db(source_id)
+    """سحب ذكي من قاعدة البيانات بناءً على نوع المصدر (ID 6=RSS, ID 7=X)"""
+    import asyncio
+    from scrapers.x_scraper import setup_client, scrape_account
+
     sources = load_rss_sources_from_db()
-    
+
     if source_id not in sources:
         logger.error(f"❌ مصدر غير معروف: {source_id}")
         return []
-    
-    logger.info(f"🔍 سحب ذكي من المصدر {source_id} (نوع: {source_type})")
-    
-    # سحب من RSS أولاً
+
+    source = sources[source_id]
+    source_type_id = source.get('source_type_id')
+
+    logger.info(f"🔍 سحب ذكي من المصدر {source_id} ({source['name']}) - نوع: {source_type_id}")
+
+    # إذا كان المصدر من نوع X (ID=7)
+    if source_type_id == 7:
+        logger.info(f"🐦 سحب من X/Twitter للمصدر {source_id}")
+        try:
+            # استخراج اسم المستخدم من الـ URL
+            url = source['url']
+            username = url.split('/')[-1]
+
+            # إنشء source dict للـ X scraper
+            x_source = {
+                'id': source_id,
+                'username': username,
+                'name': source['name'],
+                'url': url
+            }
+
+            # تشغيل الـ async scraper
+            async def scrape_x():
+                client = await setup_client()
+                result = await scrape_account(client, x_source)
+                return result.get('articles', [])
+
+            # تشغيل الـ async function
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            articles = loop.run_until_complete(scrape_x())
+            loop.close()
+
+            logger.info(f"✅ تم سحب {len(articles)} تغريدة من X")
+            return articles[:max_items]
+        except Exception as e:
+            logger.error(f"❌ خطأ في سحب X: {e}")
+            return []
+
+    # إذا كان المصدر من نوع RSS (ID=6) أو أي نوع آخر
     articles = parse_rss_from_db(source_id, max_items=max_items)
-    
-    if source_type == "full_scrape":
-        logger.info(f"📰 جاري سحب الأخبار الكاملة...")
-        
-        for i, article in enumerate(articles):
-            article = scrape_full_article_from_db(article, source_id)
-            
-            word_count = len(article.full_text.split()) if article.full_text else 0
-            
-            if word_count < 300:
-                logger.warning(f"⚠️  المقالة {i+1}: {word_count} كلمة (أقل من 300)")
-            else:
-                logger.info(f"✅ المقالة {i+1}: {word_count} كلمة")
-            
-            articles[i] = article
-    else:
-        logger.info(f"📝 سحب من RSS فقط")
-        for article in articles:
-            article.scraping_type = "rss_only"
-    
+
+    logger.info(f"📝 سحب من RSS")
+    for article in articles:
+        article.scraping_type = "rss_only"
+
     return articles
+
 
 
 def smart_scrape_and_save(source_id: int, max_items: int = 10) -> dict:
