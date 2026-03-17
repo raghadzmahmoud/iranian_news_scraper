@@ -234,24 +234,14 @@ async def scrape_account(client, source: Dict) -> Dict:
         
         tweets = []
         
-        # محاولة البحث أولاً
+        # محاولة get_tweets مباشرة (تخطي البحث لتجنب recursion error)
         try:
-            tweets = await client.search_tweet(
-                f"from:{username}", product='Latest', count=MAX_TWEETS_PER_ACCOUNT
-            )
+            tweets = await user.get_tweets('Tweets', count=MAX_TWEETS_PER_ACCOUNT)
             if DEBUG:
-                logger.info(f"      [Search] وجدت {len(tweets)} تغريدة")
-        except Exception as e1:
+                logger.info(f"      [get_tweets] وجدت {len(tweets)} تغريدة")
+        except Exception as e2:
             if DEBUG:
-                logger.info(f"      [Search فشل] {str(e1)[:60]}")
-            # محاولة get_tweets
-            try:
-                tweets = await user.get_tweets('Tweets', count=MAX_TWEETS_PER_ACCOUNT)
-                if DEBUG:
-                    logger.info(f"      [get_tweets] وجدت {len(tweets)} تغريدة")
-            except Exception as e2:
-                if DEBUG:
-                    logger.info(f"      [get_tweets فشل] {str(e2)[:60]}")
+                logger.info(f"      [get_tweets فشل] {str(e2)[:60]}")
         
         if not tweets:
             status = "⚠️ بدون تغريدات"
