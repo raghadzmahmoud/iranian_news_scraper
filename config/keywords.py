@@ -60,13 +60,17 @@ LAYER_1_KEYWORDS = {
         "الأمريكيون", "الجيش الأمريكي", "القوات الأمريكية",
         "USA", "US military", "Pentagon",
 
-        # ── دول الخليج ولبنان ───────────────────────────────────────────────
+        # ── دول الخليج ولبنان والعراق ───────────────────────────────────────
         "قطر", "البحرين", "الكويت",
-        "الإمارات", "الامارات", "الإمارات العربية المتحدة",
+        "الإمارات", "الامارات", "الإمارات العربية المتحدة", "دبي", "أبو ظبي",
         "المملكة العربية السعودية", "السعودية",
         "سلطنة عُمان", "عُمان", "عمان",
-        "لبنان",
-        "قاعدة العديد", "القواعد الأمريكية", "قواعد أمريكية",
+        "لبنان", "بيروت",
+        "العراق", "بغداد", "البصرة", "الموصل",
+        "سوريا", "دمشق",
+        "الأردن", "عمّان",
+        "فلسطين", "غزة", "الضفة الغربية",
+        "قاعدة العديد", "القواعس الأمريكية", "قواعد أمريكية",
         "دول الخليج", "دول خليجية",
     ],
 
@@ -86,12 +90,16 @@ LAYER_1_KEYWORDS = {
         "United States", "America", "American", "US military",
         "Pentagon", "White House",
 
-        # ── Gulf states & Lebanon ────────────────────────────────────────────
+        # ── Gulf states, Lebanon, Iraq & others ────────────────────────────
         "Qatar", "Bahrain", "Kuwait",
-        "UAE", "United Arab Emirates",
+        "UAE", "United Arab Emirates", "Dubai", "Abu Dhabi",
         "Saudi Arabia",
         "Oman",
-        "Lebanon",
+        "Lebanon", "Beirut",
+        "Iraq", "Baghdad", "Basra", "Mosul",
+        "Syria", "Damascus",
+        "Jordan", "Amman",
+        "Palestine", "Gaza", "West Bank",
         "Al Udeid Air Base", "US bases", "American bases",
         "Gulf states",
     ],
@@ -113,12 +121,16 @@ LAYER_1_KEYWORDS = {
         'ארה"ב', "אמריקה", "אמריקאי", "הצבא האמריקאי",
         "הפנטגון", "הבית הלבן",
 
-        # ── מדינות המפרץ ולבנון ──────────────────────────────────────────────
+        # ── מדינות המפרץ, לבנון, עיראק ואחרות ──────────────────────────────
         "קטאר", "בחריין", "כווית",
-        "איחוד האמירויות", "האמירויות",
+        "איחוד האמירויות", "האמירויות", "דובאי", "אבו דאבי",
         "ערב הסעודית",
         "עומאן",
-        "לבנון",
+        "לבנון", "ביירות",
+        "עיראק", "בגדד", "בסרה", "מוסול",
+        "סוריה", "דמשק",
+        "ירדן", "עמאן",
+        "פלסטין", "עזה", "הגדה המערבית",
         'בסיס אל-עודיד', "בסיסים אמריקאים",
         "מדינות המפרץ",
     ],
@@ -666,8 +678,8 @@ def is_relevant_article(title: str, content: str, language: str = "he") -> bool:
     التحقق من أن المقالة متعلقة بالحرب بين إيران/إسرائيل/أمريكا
 
     المعادلة:
-        (طبقة_1) OR (طبقة_2) OR (طبقة_3)
-        كلمة واحدة من أي طبقة كافية للقبول
+        (طبقة_1 من الدول) AND (طبقة_2 أو طبقة_3 من الكلمات العسكرية/السياسية)
+        يجب وجود دولة + كلمات عسكرية/سياسية معاً
     """
     text = (title + " " + content).lower()
     if language == "ar":
@@ -686,9 +698,11 @@ def is_relevant_article(title: str, content: str, language: str = "he") -> bool:
                 return True
         return False
 
-    return match_layer(LAYER_1_KEYWORDS) \
-        or match_layer(LAYER_2_KEYWORDS) \
-        or match_layer(LAYER_3_KEYWORDS)
+    # دولة من الطبقة الأولى AND كلمات عسكرية/سياسية من الطبقة الثانية أو الثالثة
+    has_country = match_layer(LAYER_1_KEYWORDS)
+    has_military_context = match_layer(LAYER_2_KEYWORDS) or match_layer(LAYER_3_KEYWORDS)
+    
+    return has_country and has_military_context
 
 
 def get_matching_keywords(title: str, content: str, language: str = "he") -> dict:
