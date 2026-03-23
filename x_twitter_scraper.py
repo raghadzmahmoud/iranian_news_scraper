@@ -6,20 +6,26 @@ X (Twitter) Scraper
 import asyncio
 import json
 import os
+import sys
 from datetime import datetime
 from typing import List, Dict, Optional
+from dotenv import load_dotenv
+
+# Load .env file
+load_dotenv()
+
+# Fix encoding on Windows
+if sys.platform == 'win32':
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 # ============================================================
 # ⚙️ الإعدادات — عدّل هنا فقط
 # ============================================================
 
-COOKIES = {
-    "auth_token": "YOUR_AUTH_TOKEN_HERE",
-    "ct0":        "YOUR_CT0_TOKEN_HERE",
-}
-
-# استخدم الكوكيز فقط
-AUTH_METHOD = "cookies"
+# استخدم الكوكيز من .env فقط (X_AUTH_TOKEN و X_CT0_TOKEN)
+X_AUTH_TOKEN = os.getenv("X_AUTH_TOKEN", "")
+X_CT0_TOKEN = os.getenv("X_CT0_TOKEN", "")
 
 COOKIES_FILE = "x_cookies.json"
 
@@ -106,7 +112,7 @@ def format_tweet(tweet, username: str) -> Dict:
 
 
 async def setup_client():
-    """إعداد الكلايت وتحميل الكوكيز"""
+    """إعداد الكلايت باستخدام X_AUTH_TOKEN و X_CT0_TOKEN من .env بدون لوجن"""
     try:
         from twikit import Client
     except ImportError:
@@ -115,11 +121,30 @@ async def setup_client():
 
     client = Client(language='ar-SA')
 
-    print("🔑 تحميل الكوكيز...")
-    with open(COOKIES_FILE, "w") as f:
-        json.dump(COOKIES, f)
-    client.load_cookies(COOKIES_FILE)
-    print("✅ تم تحميل الكوكيز")
+    # التحقق من وجود الـ tokens
+    if not X_AUTH_TOKEN or not X_CT0_TOKEN:
+        raise RuntimeError(
+            "❌ X_AUTH_TOKEN أو X_CT0_TOKEN غير موجودة في .env\n"
+            "تأكد من إضافة القيم الصحيحة في ملف .env"
+        )
+
+    try:
+        # إنشاء ملف الكوكيز من الـ tokens
+        print("🔑 تحميل الكوكيز من X_AUTH_TOKEN و X_CT0_TOKEN...")
+        with open(COOKIES_FILE, "w") as f:
+            json.dump({"auth_token": X_AUTH_TOKEN, "ct0": X_CT0_TOKEN}, f)
+        
+        # تحميل الكوكيز
+        client.load_cookies(COOKIES_FILE)
+        
+        # اختبار سريع للتحقق من صلاحية الكوكيز
+        await client.get_user_by_screen_name('twitter')
+        print("✅ كوكيز صالحة — تم التحميل بنجاح")
+    except Exception as e:
+        raise RuntimeError(
+            f"❌ فشل تحميل الكوكيز: {str(e)}\n"
+            "تأكد من أن X_AUTH_TOKEN و X_CT0_TOKEN صحيحة وصالحة"
+        )
 
     return client
 

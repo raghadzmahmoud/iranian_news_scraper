@@ -17,9 +17,6 @@ from utils.logger import logger
 from config.settings import (
     X_AUTH_TOKEN,
     X_CT0_TOKEN,
-    X_EMAIL,
-    X_USERNAME,
-    X_PASSWORD,
     X_MAX_TWEETS_PER_ACCOUNT,
     X_DELAY_BETWEEN_ACCOUNTS,
     X_DEBUG,
@@ -35,11 +32,6 @@ if sys.platform == 'win32':
 # ============================================================
 # ⚙️ الإعدادات من .env
 # ============================================================
-
-COOKIES = {
-    "auth_token": X_AUTH_TOKEN,
-    "ct0":        X_CT0_TOKEN,
-}
 
 COOKIES_FILE = X_COOKIES_FILE
 MAX_TWEETS_PER_ACCOUNT = X_MAX_TWEETS_PER_ACCOUNT
@@ -210,10 +202,8 @@ def tweet_to_article(tweet, username: str, source_name: str) -> NewsArticle:
 
 async def setup_client():
     """
-    إعداد الكلايت مع fallback تلقائي:
-    1. يحاول يحمّل الكوكيز الموجودة ويختبرها
-    2. لو فشلت → يجرب كوكيز .env
-    3. لو فشلت → يحاول login تلقائي باستخدام البيانات من .env
+    إعداد الكلايت باستخدام X_AUTH_TOKEN و X_CT0_TOKEN من .env
+    بدون أي لوجن
     """
     try:
         from twikit import Client
@@ -223,56 +213,29 @@ async def setup_client():
 
     client = Client(language='ar-SA')
 
-    # --- محاولة 1: تحميل الكوكيز الموجودة ---
-    cookies_valid = False
-    if os.path.exists(COOKIES_FILE):
-        try:
-            client.load_cookies(COOKIES_FILE)
-            # اختبار سريع للتحقق من صلاحية الكوكيز
-            await client.get_user_by_screen_name('twitter')
-            logger.info("✅ كوكيز صالحة — تم التحميل من الملف")
-            cookies_valid = True
-        except Exception as e:
-            logger.warning(f"⚠️ كوكيز منتهية أو غير صالحة ({str(e)[:80]})")
-
-    # --- محاولة 2: كوكيز من .env (auth_token + ct0) ---
-    if not cookies_valid and X_AUTH_TOKEN and X_CT0_TOKEN:
-        try:
-            logger.info("🔑 تجربة كوكيز من .env ...")
-            with open(COOKIES_FILE, "w") as f:
-                json.dump({"auth_token": X_AUTH_TOKEN, "ct0": X_CT0_TOKEN}, f)
-            client.load_cookies(COOKIES_FILE)
-            await client.get_user_by_screen_name('twitter')
-            logger.info("✅ كوكيز .env صالحة")
-            cookies_valid = True
-        except Exception as e:
-            logger.warning(f"⚠️ كوكيز .env فشلت ({str(e)[:80]})")
-
-    # --- محاولة 3: Login تلقائي باستخدام البيانات من .env ---
-    if not cookies_valid and X_EMAIL and X_PASSWORD:
-        try:
-            logger.info("🔐 محاولة login تلقائي...")
-            await client.login(
-                auth_info_1=X_EMAIL,
-                auth_info_2=X_USERNAME or X_EMAIL,
-                password=X_PASSWORD
-            )
-            logger.info("✅ تم login بنجاح!")
-            # حفظ الكوكيز للاستخدام لاحقاً
-            client.save_cookies(COOKIES_FILE)
-            logger.info(f"💾 تم حفظ الكوكيز في {COOKIES_FILE}")
-            cookies_valid = True
-        except Exception as e:
-            logger.error(f"❌ فشل Login التلقائي: {str(e)[:100]}")
-
-    # --- إذا فشلت جميع المحاولات ---
-    if not cookies_valid:
+    # التحقق من وجود الـ tokens
+    if not X_AUTH_TOKEN or not X_CT0_TOKEN:
         raise RuntimeError(
-            "❌ فشل الاتصال بـ X\n"
-            "تأكد من:\n"
-            "1. X_EMAIL و X_PASSWORD صحيحة في .env\n"
-            "2. أو X_AUTH_TOKEN و X_CT0_TOKEN صحيحة\n"
-            "3. أو ملف x_cookies.json موجود وصالح"
+            "❌ X_AUTH_TOKEN أو X_CT0_TOKEN غير موجودة في .env\n"
+            "تأكد من إضافة القيم الصحيحة في ملف .env"
+        )
+
+    try:
+        # إنشاء ملف الكوكيز من الـ tokens
+        logger.info("🔑 تحميل الكوكيز من X_AUTH_TOKEN و X_CT0_TOKEN...")
+        with open(COOKIES_FILE, "w") as f:
+            json.dump({"auth_token": X_AUTH_TOKEN, "ct0": X_CT0_TOKEN}, f)
+        
+        # تحميل الكوكيز
+        client.load_cookies(COOKIES_FILE)
+        
+        # اختبار سريع للتحقق من صلاحية الكوكيز
+        await client.get_user_by_screen_name('twitter')
+        logger.info("✅ كوكيز صالحة — تم التحميل بنجاح")
+    except Exception as e:
+        raise RuntimeError(
+            f"❌ فشل تحميل الكوكيز: {str(e)}\n"
+            "تأكد من أن X_AUTH_TOKEN و X_CT0_TOKEN صحيحة وصالحة"
         )
 
     return client
