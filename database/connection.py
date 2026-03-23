@@ -92,13 +92,19 @@ class DatabaseConnection:
             return False
 
     def insert_raw_data(self, source_id: int, article_data: dict):
-        """إدراج البيانات الخام في جدول raw_news"""
+        """
+        إدراج البيانات الخام في جدول raw_news
+        
+        Returns:
+            - معرّف المقالة إذا تم الإدراج بنجاح
+            - None إذا كانت المقالة موجودة بالفعل (Duplicate URL)
+            - False إذا حدث خطأ في قاعدة البيانات
+        """
         try:
             query = """
                 INSERT INTO public.raw_news 
                 (source_id, url, title_original, content_original, language_id, published_at, fetched_at, processing_status, has_numbers)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (url) DO NOTHING
                 RETURNING id
             """
             self.cursor.execute(query, (
@@ -116,18 +122,23 @@ class DatabaseConnection:
             result = self.cursor.fetchone()
             self.conn.commit()
             
-            if result:
-                row_id = result['id'] if isinstance(result, dict) else result[0]
-                logger.info(f"✅ تم إدراج البيانات الخام برقم: {row_id}")
-                return row_id
-            else:
-                logger.info(f"⚠️  المقالة موجودة بالفعل: {article_data.get('url')}")
-                return None
+            row_id = result['id'] if isinstance(result, dict) else result[0]
+            logger.info(f"✅ تم إدراج البيانات الخام برقم: {row_id}")
+            return row_id
             
-        except psycopg2.Error as e:
-            logger.error(f"❌ خطأ في إدراج البيانات الخام: {e}")
+        except psycopg2.IntegrityError as e:
             self.conn.rollback()
-            return None
+            if 'unique constraint' in str(e).lower() or 'duplicate key' in str(e).lower():
+                logger.info(f"⏭️  المقالة موجودة بالفعل (URL مكرر): {article_data.get('url')[:60]}")
+                return None
+            else:
+                logger.error(f"❌ خطأ في قيود البيانات: {e}")
+                return False
+        
+        except psycopg2.Error as e:
+            self.conn.rollback()
+            logger.error(f"❌ خطأ في إدراج البيانات الخام: {e}")
+            return False
 
     def close(self):
         """إغلاق الاتصال"""

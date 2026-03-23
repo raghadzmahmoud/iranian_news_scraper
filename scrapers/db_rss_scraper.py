@@ -112,11 +112,16 @@ def parse_rss_from_db(source_id: int, max_items: int = 10) -> list[NewsArticle]:
                 url = entry.get('link', '')
                 summary = entry.get('summary', '')
                 
-                # شرط خاص للمصدر 17 (Annahar): تخطي المقالات اللي فيها "opinion" في الـ URL
-                if source_id == 17 and 'opinion' in url.lower():
-                    logger.info(f"⏭️  تم تخطي مقالة opinion من المصدر 17: {title[:50]}")
-                    skipped_count += 1
-                    continue
+                # شرط خاص للمصدر 17 (Annahar): تخطي المقالات اللي فيها "opinion" أو تبدأ بـ "en.annahar"
+                if source_id == 17:
+                    if 'opinion' in url.lower():
+                        logger.info(f"⏭️  تم تخطي مقالة opinion من المصدر 17: {title[:50]}")
+                        skipped_count += 1
+                        continue
+                    if url.lower().startswith('https://en.annahar.com') or url.lower().startswith('http://en.annahar.com'):
+                        logger.info(f"⏭️  تم تخطي مقالة إنجليزية من المصدر 17: {title[:50]}")
+                        skipped_count += 1
+                        continue
                 
                 # إزالة الـ HTML tags من الملخص
                 if summary:

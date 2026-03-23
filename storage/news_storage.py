@@ -76,7 +76,9 @@ class NewsStorage:
             article_data: بيانات المقالة {title, url, content, language, published_at, has_numbers}
         
         Returns:
-            معرّف المقالة المحفوظة أو None
+            - معرّف المقالة إذا تم الحفظ بنجاح
+            - None إذا كانت المقالة موجودة بالفعل (Duplicate URL)
+            - False إذا حدث خطأ في قاعدة البيانات
         
         ملاحظة:
             processing_status يتم تعيينه تلقائياً بناءً على اللغة:
@@ -85,6 +87,7 @@ class NewsStorage:
             
             بعد الترجمة، يتم تحديثه إلى 1 باستخدام update_translated_status_job
         """
+        cursor = None
         try:
             if not db.conn:
                 db.connect()
@@ -99,12 +102,7 @@ class NewsStorage:
             url = article_data.get('url', '')
             if not url:
                 logger.warning(f"⚠️  المقالة بدون URL")
-                return None
-            
-            # التحقق من وجود URL
-            if NewsStorage.url_exists(url):
-                logger.info(f"⏭️  المقالة موجودة بالفعل: {url[:50]}")
-                return None
+                return False
             
             # الحصول على has_numbers
             has_numbers = article_data.get('has_numbers', False)
@@ -142,24 +140,29 @@ class NewsStorage:
                 logger.info(f"✅ تم حفظ المقالة برقم: {article_id} - URL: {url[:50]}")
                 return article_id
             
-            return None
+            return False
         
         except psycopg2.IntegrityError as e:
             db.conn.rollback()
-            logger.warning(f"⏭️  المقالة موجودة بالفعل (Integrity Error): {str(e)[:50]}")
-            return None
+            error_msg = str(e).lower()
+            if 'unique constraint' in error_msg or 'duplicate key' in error_msg:
+                logger.info(f"⏭️  المقالة موجودة بالفعل (URL مكرر): {article_data.get('url', '')[:50]}")
+                return None
+            else:
+                logger.error(f"❌ خطأ في قيود البيانات: {e}")
+                return False
         
         except Exception as e:
             db.conn.rollback()
             logger.error(f"❌ خطأ في حفظ المقالة: {e}")
-            return None
+            return False
         
         finally:
             if cursor:
                 cursor.close()
     
     @staticmethod
-    def save_articles_batch(source_id: int, articles: list) -> int:
+    def save_articles_batch(source_id: int, articles: list) -> dict:
         """
         حفظ مجموعة من المقالات
         
@@ -168,9 +171,14 @@ class NewsStorage:
             articles: قائمة المقالات
         
         Returns:
-            عدد المقالات المحفوظة
+            قاموس يحتوي على:
+            - 'saved': عدد المقالات المحفوظة بنجاح
+            - 'duplicates': عدد المقالات المكررة (موجودة بالفعل)
+            - 'errors': عدد المقالات التي حدث خطأ عند حفظها
         """
         saved_count = 0
+        duplicate_count = 0
+        error_count = 0
         
         for article in articles:
             article_data = {
@@ -181,10 +189,23 @@ class NewsStorage:
                 'published_at': article.pub_date
             }
             
-            if NewsStorage.save_article(source_id, article_data):
+            result = NewsStorage.save_article(source_id, article_data)
+            
+            if result is None:
+                # المقالة موجودة بالفعل (Duplicate)
+                duplicate_count += 1
+            elif result is False:
+                # حدث خطأ
+                error_count += 1
+            else:
+                # تم الحفظ بنجاح
                 saved_count += 1
         
-        return saved_count
+        return {
+            'saved': saved_count,
+            'duplicates': duplicate_count,
+            'errors': error_count
+        }
     
     @staticmethod
     def get_articles_by_source(source_id: int, limit: int = 10) -> list:

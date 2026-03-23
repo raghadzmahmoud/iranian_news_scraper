@@ -1,12 +1,15 @@
+#!/usr/bin/env python
 """
-تشغيل سكراب X بسرعة
+تشغيل سحب X من أي مجلد
 """
-import asyncio
 import sys
-sys.path.insert(0, '.')
+import os
+import asyncio
+
+# أضف المجلد الجذر إلى المسار
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from scrapers.x_scraper import main
 
 if __name__ == "__main__":
-    print("🚀 بدء سكراب X...")
     asyncio.run(main())

@@ -7,6 +7,7 @@ X (Twitter) Scraper - سحب من قاعدة البيانات
 import asyncio
 import json
 import os
+import sys
 from datetime import datetime
 from typing import List, Dict, Optional
 from database.connection import db
@@ -16,11 +17,19 @@ from utils.logger import logger
 from config.settings import (
     X_AUTH_TOKEN,
     X_CT0_TOKEN,
+    X_EMAIL,
+    X_USERNAME,
+    X_PASSWORD,
     X_MAX_TWEETS_PER_ACCOUNT,
     X_DELAY_BETWEEN_ACCOUNTS,
     X_DEBUG,
     X_COOKIES_FILE
 )
+
+# Fix encoding on Windows
+if sys.platform == 'win32':
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 
 # ============================================================
@@ -200,21 +209,72 @@ def tweet_to_article(tweet, username: str, source_name: str) -> NewsArticle:
 
 
 async def setup_client():
-    """إعداد الكلايت وتحميل الكوكيز"""
+    """
+    إعداد الكلايت مع fallback تلقائي:
+    1. يحاول يحمّل الكوكيز الموجودة ويختبرها
+    2. لو فشلت → يجرب كوكيز .env
+    3. لو فشلت → يحاول login تلقائي باستخدام البيانات من .env
+    """
     try:
         from twikit import Client
     except ImportError:
         logger.error("❌ twikit غير مثبت. شغّل: pip install twikit")
         exit(1)
-    
+
     client = Client(language='ar-SA')
-    
-    logger.info("🔑 تحميل الكوكيز...")
-    with open(COOKIES_FILE, "w") as f:
-        json.dump(COOKIES, f)
-    client.load_cookies(COOKIES_FILE)
-    logger.info("✅ تم تحميل الكوكيز")
-    
+
+    # --- محاولة 1: تحميل الكوكيز الموجودة ---
+    cookies_valid = False
+    if os.path.exists(COOKIES_FILE):
+        try:
+            client.load_cookies(COOKIES_FILE)
+            # اختبار سريع للتحقق من صلاحية الكوكيز
+            await client.get_user_by_screen_name('twitter')
+            logger.info("✅ كوكيز صالحة — تم التحميل من الملف")
+            cookies_valid = True
+        except Exception as e:
+            logger.warning(f"⚠️ كوكيز منتهية أو غير صالحة ({str(e)[:80]})")
+
+    # --- محاولة 2: كوكيز من .env (auth_token + ct0) ---
+    if not cookies_valid and X_AUTH_TOKEN and X_CT0_TOKEN:
+        try:
+            logger.info("🔑 تجربة كوكيز من .env ...")
+            with open(COOKIES_FILE, "w") as f:
+                json.dump({"auth_token": X_AUTH_TOKEN, "ct0": X_CT0_TOKEN}, f)
+            client.load_cookies(COOKIES_FILE)
+            await client.get_user_by_screen_name('twitter')
+            logger.info("✅ كوكيز .env صالحة")
+            cookies_valid = True
+        except Exception as e:
+            logger.warning(f"⚠️ كوكيز .env فشلت ({str(e)[:80]})")
+
+    # --- محاولة 3: Login تلقائي باستخدام البيانات من .env ---
+    if not cookies_valid and X_EMAIL and X_PASSWORD:
+        try:
+            logger.info("🔐 محاولة login تلقائي...")
+            await client.login(
+                auth_info_1=X_EMAIL,
+                auth_info_2=X_USERNAME or X_EMAIL,
+                password=X_PASSWORD
+            )
+            logger.info("✅ تم login بنجاح!")
+            # حفظ الكوكيز للاستخدام لاحقاً
+            client.save_cookies(COOKIES_FILE)
+            logger.info(f"💾 تم حفظ الكوكيز في {COOKIES_FILE}")
+            cookies_valid = True
+        except Exception as e:
+            logger.error(f"❌ فشل Login التلقائي: {str(e)[:100]}")
+
+    # --- إذا فشلت جميع المحاولات ---
+    if not cookies_valid:
+        raise RuntimeError(
+            "❌ فشل الاتصال بـ X\n"
+            "تأكد من:\n"
+            "1. X_EMAIL و X_PASSWORD صحيحة في .env\n"
+            "2. أو X_AUTH_TOKEN و X_CT0_TOKEN صحيحة\n"
+            "3. أو ملف x_cookies.json موجود وصالح"
+        )
+
     return client
 
 
