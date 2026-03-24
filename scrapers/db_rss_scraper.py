@@ -27,7 +27,7 @@ def load_rss_sources_from_db() -> dict:
             SELECT s.id, s.url, st.name as type, s.is_active, s.name, s.source_type_id
             FROM public.sources s
             JOIN public.source_types st ON s.source_type_id = st.id
-            WHERE s.is_active = true
+            WHERE s.is_active = true AND s.source_type_id = 6
             ORDER BY st.name, s.id
         """
         cursor.execute(query)
@@ -54,6 +54,42 @@ def load_rss_sources_from_db() -> dict:
         if db.conn:
             db.conn.rollback()
         return {}
+
+
+def load_source_by_id(source_id: int) -> dict | None:
+    """Load a single source by id from the database."""
+    try:
+        if not db.conn:
+            db.connect()
+
+        cursor = db.conn.cursor()
+        query = """
+            SELECT s.id, s.url, st.name as type, s.is_active, s.name, s.source_type_id
+            FROM public.sources s
+            JOIN public.source_types st ON s.source_type_id = st.id
+            WHERE s.id = %s
+        """
+        cursor.execute(query, (source_id,))
+        row = cursor.fetchone()
+        cursor.close()
+
+        if not row:
+            return None
+
+        return {
+            'id': row[0],
+            'url': row[1],
+            'type': row[2],
+            'active': row[3],
+            'name': row[4],
+            'source_type_id': row[5]
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to load source {source_id}: {e}")
+        if db.conn:
+            db.conn.rollback()
+        return None
 
 
 def get_source_type_id_from_db(source_id: int) -> int:
@@ -83,13 +119,16 @@ def get_source_type_id_from_db(source_id: int) -> int:
 
 def parse_rss_from_db(source_id: int, max_items: int = 10) -> list[NewsArticle]:
     """تحليل RSS من مصدر في قاعدة البيانات"""
-    sources = load_rss_sources_from_db()
-    
-    if source_id not in sources:
-        logger.error(f"❌ مصدر غير معروف: {source_id}")
+    source = load_source_by_id(source_id)
+    if not source:
+        logger.error(f"Unknown source: {source_id}")
         return []
-    
-    feed_url = sources[source_id]['url']
+
+    if source.get('source_type_id') != 6:
+        logger.warning(f"Source {source_id} is not RSS (type {source.get('source_type_id')}); skipping.")
+        return []
+
+    feed_url = source['url']
     logger.info(f"📡 جاري تحليل RSS من المصدر {source_id}...")
     
     try:
@@ -265,13 +304,11 @@ def smart_scrape_from_db(source_id: int, max_items: int = 10) -> list[NewsArticl
     import asyncio
     from scrapers.x_scraper import setup_client, scrape_account
 
-    sources = load_rss_sources_from_db()
-
-    if source_id not in sources:
-        logger.error(f"❌ مصدر غير معروف: {source_id}")
+    source = load_source_by_id(source_id)
+    if not source:
+        logger.error(f"Unknown source: {source_id}")
         return []
 
-    source = sources[source_id]
     source_type_id = source.get('source_type_id')
 
     logger.info(f"🔍 سحب ذكي من المصدر {source_id} ({source['name']}) - نوع: {source_type_id}")

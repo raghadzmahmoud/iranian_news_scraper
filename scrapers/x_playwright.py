@@ -21,6 +21,7 @@ from config.settings import (
     X_MAX_SCROLLS,
     X_MAX_TWEETS,
     X_PLAYWRIGHT_CHANNEL,
+    X_PLAYWRIGHT_HEADLESS,
 )
 
 CHROME_PROFILE_DIR = X_CHROME_PROFILE_DIR or os.path.join(os.path.dirname(__file__), "../X_scraper/chrome_profile")
@@ -51,7 +52,7 @@ async def load_or_create_session(playwright):
 
     launch_kwargs = {
         "user_data_dir": CHROME_PROFILE_DIR,
-        "headless": not needs_login,
+        "headless": X_PLAYWRIGHT_HEADLESS,
         "args": STEALTH_ARGS,
         "ignore_default_args": ["--enable-automation"],
     }
@@ -78,7 +79,7 @@ async def load_or_create_session(playwright):
             # Relaunch visible for re-login
             relaunch_kwargs = {
                 "user_data_dir": CHROME_PROFILE_DIR,
-                "headless": False,
+                "headless": X_PLAYWRIGHT_HEADLESS,
                 "args": STEALTH_ARGS,
                 "ignore_default_args": ["--enable-automation"],
             }
