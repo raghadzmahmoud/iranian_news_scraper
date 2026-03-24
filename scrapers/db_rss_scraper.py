@@ -12,7 +12,7 @@ from models.article import NewsArticle
 from database.connection import db
 from storage.news_storage import NewsStorage
 from storage.article_processor import ArticleProcessor
-from config.settings import HEADERS
+from config.settings import HEADERS, USE_X_PLAYWRIGHT
 from utils.logger import logger
 
 
@@ -278,6 +278,9 @@ def smart_scrape_from_db(source_id: int, max_items: int = 10) -> list[NewsArticl
 
     # إذا كان المصدر من نوع X (ID=7)
     if source_type_id == 7:
+        if USE_X_PLAYWRIGHT:
+            logger.info("X sources are handled by the Playwright job; skipping in RSS pipeline")
+            return []
         logger.info(f"🐦 سحب من X/Twitter للمصدر {source_id}")
         try:
             # استخراج اسم المستخدم من الـ URL

@@ -15,7 +15,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.executors.pool import ThreadPoolExecutor as APSchedulerThreadPoolExecutor
 from scrapers.db_rss_scraper import scrape_all_sources_and_save
 from jobs.translation_job import run_translation_job
-from jobs.x_scraper_job import run_x_scraper_job
+from jobs.x_playwright_job import run_x_playwright_job
 from utils.logger import logger
 
 
@@ -75,13 +75,13 @@ class AdvancedParallelWorker:
         
         try:
             logger.info(f"🐦 [السحب X #{count}] بدء السحب من X في {datetime.now()}")
-            result = asyncio.run(run_x_scraper_job())
+            result = asyncio.run(run_x_playwright_job())
             
             if result:
-                total_scraped = result.get('total_scraped', 0)
+                total_scraped = result.get('total_articles_scraped', 0)
                 total_saved = result.get('total_saved', 0)
-                total_filtered = result.get('total_filtered', 0)
-                with_numbers = result.get('total_with_numbers', 0)
+                total_filtered = result.get('total_duplicates', 0)
+                with_numbers = result.get('total_numbers_filtered', 0)
                 
                 logger.info(f"✅ [السحب X #{count}] انتهى: {total_scraped} تغريدة، {total_saved} محفوظة، {total_filtered} مفلترة، {with_numbers} مع أرقام")
             else:
@@ -137,7 +137,7 @@ class AdvancedParallelWorker:
         self.scheduler.add_job(
             self.run_x_scraping,
             'interval',
-            minutes=10,
+            minutes=20,
             id='x_scraping_job',
             name='سحب X (Twitter)',
             next_run_time=datetime.now()  # تشغيل فوري

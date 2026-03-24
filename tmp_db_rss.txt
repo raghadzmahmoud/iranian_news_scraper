@@ -1,0 +1,426 @@
+0001: """
+0002: سكراب RSS من قاعدة البيانات - نسخة محسّنة
+0003: """
+0004: import requests
+0005: from bs4 import BeautifulSoup
+0006: import feedparser
+0007: import asyncio
+0008: from datetime import datetime
+0009: from email.utils import parsedate_to_datetime
+0010: from dateutil import parser as date_parser
+0011: from models.article import NewsArticle
+0012: from database.connection import db
+0013: from storage.news_storage import NewsStorage
+0014: from storage.article_processor import ArticleProcessor
+0015: from config.settings import HEADERS
+0016: from utils.logger import logger
+0017: 
+0018: 
+0019: def load_rss_sources_from_db() -> dict:
+0020:     """تحميل المصادر من قاعدة البيانات"""
+0021:     try:
+0022:         if not db.conn:
+0023:             db.connect()
+0024:         
+0025:         cursor = db.conn.cursor()
+0026:         query = """
+0027:             SELECT s.id, s.url, st.name as type, s.is_active, s.name, s.source_type_id
+0028:             FROM public.sources s
+0029:             JOIN public.source_types st ON s.source_type_id = st.id
+0030:             WHERE s.is_active = true
+0031:             ORDER BY st.name, s.id
+0032:         """
+0033:         cursor.execute(query)
+0034:         rows = cursor.fetchall()
+0035:         cursor.close()
+0036:         
+0037:         sources = {}
+0038:         for row in rows:
+0039:             source_id = row[0]
+0040:             sources[source_id] = {
+0041:                 'id': source_id,
+0042:                 'url': row[1],
+0043:                 'type': row[2],
+0044:                 'active': row[3],
+0045:                 'name': row[4],
+0046:                 'source_type_id': row[5]
+0047:             }
+0048:         
+0049:         logger.info(f"✅ تم تحميل {len(sources)} مصدر من قاعدة البيانات")
+0050:         return sources
+0051:     
+0052:     except Exception as e:
+0053:         logger.error(f"❌ خطأ في تحميل المصادر: {e}")
+0054:         if db.conn:
+0055:             db.conn.rollback()
+0056:         return {}
+0057: 
+0058: 
+0059: def get_source_type_id_from_db(source_id: int) -> int:
+0060:     """الحصول على نوع المصدر (ID) من قاعدة البيانات - 6=RSS, 7=X"""
+0061:     try:
+0062:         if not db.conn:
+0063:             db.connect()
+0064:         
+0065:         cursor = db.conn.cursor()
+0066:         query = """
+0067:             SELECT source_type_id
+0068:             FROM public.sources
+0069:             WHERE id = %s
+0070:         """
+0071:         cursor.execute(query, (source_id,))
+0072:         result = cursor.fetchone()
+0073:         cursor.close()
+0074:         
+0075:         return result[0] if result else -1
+0076:     
+0077:     except Exception as e:
+0078:         logger.error(f"❌ خطأ في الحصول على نوع المصدر: {e}")
+0079:         if db.conn:
+0080:             db.conn.rollback()
+0081:         return -1
+0082: 
+0083: 
+0084: def parse_rss_from_db(source_id: int, max_items: int = 10) -> list[NewsArticle]:
+0085:     """تحليل RSS من مصدر في قاعدة البيانات"""
+0086:     sources = load_rss_sources_from_db()
+0087:     
+0088:     if source_id not in sources:
+0089:         logger.error(f"❌ مصدر غير معروف: {source_id}")
+0090:         return []
+0091:     
+0092:     feed_url = sources[source_id]['url']
+0093:     logger.info(f"📡 جاري تحليل RSS من المصدر {source_id}...")
+0094:     
+0095:     try:
+0096:         resp = requests.get(feed_url, headers=HEADERS, timeout=15)
+0097:         resp.raise_for_status()
+0098:         resp.encoding = "utf-8"
+0099:         
+0100:         feed = feedparser.parse(resp.text)
+0101:         
+0102:         if not feed.entries:
+0103:             logger.warning(f"⚠️  لا توجد مقالات في الـ RSS")
+0104:             return []
+0105:         
+0106:         articles = []
+0107:         skipped_count = 0
+0108:         
+0109:         for entry in feed.entries[:max_items]:
+0110:             try:
+0111:                 title = entry.get('title', 'بدون عنوان')
+0112:                 url = entry.get('link', '')
+0113:                 summary = entry.get('summary', '')
+0114:                 
+0115:                 # شرط خاص للمصدر 17 (Annahar): تخطي المقالات اللي فيها "opinion" أو تبدأ بـ "en.annahar"
+0116:                 if source_id == 17:
+0117:                     if 'opinion' in url.lower():
+0118:                         logger.info(f"⏭️  تم تخطي مقالة opinion من المصدر 17: {title[:50]}")
+0119:                         skipped_count += 1
+0120:                         continue
+0121:                     if url.lower().startswith('https://en.annahar.com') or url.lower().startswith('http://en.annahar.com'):
+0122:                         logger.info(f"⏭️  تم تخطي مقالة إنجليزية من المصدر 17: {title[:50]}")
+0123:                         skipped_count += 1
+0124:                         continue
+0125:                 
+0126:                 # إزالة الـ HTML tags من الملخص
+0127:                 if summary:
+0128:                     soup = BeautifulSoup(summary, 'html.parser')
+0129:                     for img in soup.find_all('img'):
+0130:                         img.decompose()
+0131:                     summary = soup.get_text(separator=' ', strip=True)
+0132:                 
+0133:                 pub_date = None
+0134:                 # محاولة استخراج تاريخ النشر من عدة حقول
+0135:                 if entry.get('published_parsed'):
+0136:                     pub_date = datetime(*entry.published_parsed[:6])
+0137:                 elif entry.get('updated_parsed'):
+0138:                     pub_date = datetime(*entry.updated_parsed[:6])
+0139:                 elif entry.get('pubDate'):
+0140:                     # محاولة تحليل pubDate كنص
+0141:                     try:
+0142:                         pub_date = parsedate_to_datetime(entry.get('pubDate'))
+0143:                     except:
+0144:                         pub_date = None
+0145:                 elif entry.get('dc_date'):
+0146:                     # محاولة تحليل dc:date (من DW وغيرها)
+0147:                     try:
+0148:                         pub_date = date_parser.parse(entry.get('dc_date'))
+0149:                     except:
+0150:                         pub_date = None
+0151:                 elif entry.get('date'):
+0152:                     # محاولة تحليل date العام
+0153:                     try:
+0154:                         pub_date = date_parser.parse(entry.get('date'))
+0155:                     except:
+0156:                         pub_date = None
+0157:                 
+0158:                 if not pub_date:
+0159:                     logger.warning(f"⚠️  لم يتم العثور على تاريخ نشر للمقالة: {title[:50]}")
+0160:                 
+0161:                 article = NewsArticle(
+0162:                     title=title,
+0163:                     url=url,
+0164:                     summary=summary,
+0165:                     source=f"Source {source_id}",
+0166:                     pub_date=pub_date
+0167:                 )
+0168:                 
+0169:                 articles.append(article)
+0170:             
+0171:             except Exception as e:
+0172:                 logger.warning(f"⚠️  خطأ في معالجة مقالة: {e}")
+0173:                 continue
+0174:         
+0175:         logger.info(f"✅ تم تحليل {len(articles)} مقالة من RSS")
+0176:         if skipped_count > 0:
+0177:             logger.info(f"⏭️  تم تخطي {skipped_count} مقالة opinion من المصدر 17")
+0178:         return articles
+0179:     
+0180:     except Exception as e:
+0181:         logger.error(f"❌ خطأ في تحليل الـ RSS: {e}")
+0182:         return []
+0183: 
+0184: 
+0185: def scrape_full_article_from_db(article: NewsArticle, source_id: int) -> NewsArticle:
+0186:     """سحب الخبر الكامل من الموقع"""
+0187:     if not article.url:
+0188:         logger.warning(f"⚠️  لا يوجد رابط للمقالة")
+0189:         return article
+0190:     
+0191:     try:
+0192:         resp = requests.get(article.url, headers=HEADERS, timeout=15)
+0193:         resp.raise_for_status()
+0194:         resp.encoding = "utf-8"
+0195:         
+0196:         soup = BeautifulSoup(resp.text, "lxml")
+0197:         
+0198:         # إزالة العناصر غير المرغوبة
+0199:         remove_selectors = [
+0200:             "div[class*='advertisement']", "div[class*='ad-']",
+0201:             "div[class*='taboola']", "div[class*='outbrain']",
+0202:             "nav", "aside", "footer",
+0203:             "div[class*='sidebar']", "div[class*='related']",
+0204:             "div[class*='share']", "div[class*='social']",
+0205:             "div[class*='comment']", "script", "style", "noscript"
+0206:         ]
+0207:         
+0208:         for selector in remove_selectors:
+0209:             for el in soup.select(selector):
+0210:                 el.decompose()
+0211:         
+0212:         # البحث عن محتوى المقال
+0213:         article_selectors = [
+0214:             "article", "main",
+0215:             "div.article-body", "div.article-content",
+0216:             "div[data-testid='article-body']",
+0217:             "div[itemprop='articleBody']"
+0218:         ]
+0219:         
+0220:         article_body = None
+0221:         for selector in article_selectors:
+0222:             article_body = soup.select_one(selector)
+0223:             if article_body:
+0224:                 break
+0225:         
+0226:         if not article_body:
+0227:             divs = soup.find_all("div")
+0228:             if divs:
+0229:                 article_body = max(divs, key=lambda d: len(d.get_text(strip=True)))
+0230:         
+0231:         if article_body:
+0232:             paragraphs = []
+0233:             for p in article_body.find_all("p"):
+0234:                 text = p.get_text(separator=" ", strip=True)
+0235:                 if text and len(text) > 30:
+0236:                     paragraphs.append(text)
+0237:             
+0238:             if paragraphs:
+0239:                 article.full_text = "\n\n".join(paragraphs)
+0240:                 article.paragraphs = paragraphs
+0241:             else:
+0242:                 article.full_text = article_body.get_text(separator="\n", strip=True)
+0243:             
+0244:             # استخراج الصورة
+0245:             if not article.image_url:
+0246:                 img_tag = article_body.find("img")
+0247:                 if img_tag:
+0248:                     img_src = img_tag.get("src") or img_tag.get("data-src")
+0249:                     if img_src and img_src.startswith("http"):
+0250:                         article.image_url = img_src
+0251:         
+0252:         article.scraping_type = "full_scrape"
+0253:         word_count = len(article.full_text.split()) if article.full_text else 0
+0254:         logger.info(f"✅ تم سحب الخبر الكامل: {word_count} كلمة")
+0255:         
+0256:     except Exception as e:
+0257:         logger.error(f"❌ خطأ في سحب الخبر الكامل: {e}")
+0258:         article.scraping_type = "rss_only"
+0259:     
+0260:     return article
+0261: 
+0262: 
+0263: def smart_scrape_from_db(source_id: int, max_items: int = 10) -> list[NewsArticle]:
+0264:     """سحب ذكي من قاعدة البيانات بناءً على نوع المصدر (ID 6=RSS, ID 7=X)"""
+0265:     import asyncio
+0266:     from scrapers.x_scraper import setup_client, scrape_account
+0267: 
+0268:     sources = load_rss_sources_from_db()
+0269: 
+0270:     if source_id not in sources:
+0271:         logger.error(f"❌ مصدر غير معروف: {source_id}")
+0272:         return []
+0273: 
+0274:     source = sources[source_id]
+0275:     source_type_id = source.get('source_type_id')
+0276: 
+0277:     logger.info(f"🔍 سحب ذكي من المصدر {source_id} ({source['name']}) - نوع: {source_type_id}")
+0278: 
+0279:     # إذا كان المصدر من نوع X (ID=7)
+0280:     if source_type_id == 7:
+0281:         logger.info(f"🐦 سحب من X/Twitter للمصدر {source_id}")
+0282:         try:
+0283:             # استخراج اسم المستخدم من الـ URL
+0284:             url = source['url']
+0285:             username = url.split('/')[-1]
+0286: 
+0287:             # إنشء source dict للـ X scraper
+0288:             x_source = {
+0289:                 'id': source_id,
+0290:                 'username': username,
+0291:                 'name': source['name'],
+0292:                 'url': url
+0293:             }
+0294: 
+0295:             # تشغيل الـ async scraper
+0296:             async def scrape_x():
+0297:                 client = await setup_client()
+0298:                 result = await scrape_account(client, x_source)
+0299:                 return result.get('articles', [])
+0300: 
+0301:             # تشغيل الـ async function
+0302:             loop = asyncio.new_event_loop()
+0303:             asyncio.set_event_loop(loop)
+0304:             articles = loop.run_until_complete(scrape_x())
+0305:             loop.close()
+0306: 
+0307:             logger.info(f"✅ تم سحب {len(articles)} تغريدة من X")
+0308:             return articles[:max_items]
+0309:         except Exception as e:
+0310:             logger.error(f"❌ خطأ في سحب X: {e}")
+0311:             return []
+0312: 
+0313:     # إذا كان المصدر من نوع RSS (ID=6) أو أي نوع آخر
+0314:     articles = parse_rss_from_db(source_id, max_items=max_items)
+0315: 
+0316:     logger.info(f"📝 سحب من RSS")
+0317:     for article in articles:
+0318:         article.scraping_type = "rss_only"
+0319: 
+0320:     return articles
+0321: 
+0322: 
+0323: 
+0324: def smart_scrape_and_save(source_id: int, max_items: int = 10) -> dict:
+0325:     """
+0326:     سحب ذكي وحفظ في قاعدة البيانات مع الفلترة والمعالجة
+0327:     
+0328:     Args:
+0329:         source_id: معرّف المصدر
+0330:         max_items: عدد المقالات
+0331:     
+0332:     Returns:
+0333:         قاموس بإحصائيات السحب والحفظ والمعالجة
+0334:     """
+0335:     logger.info(f"🚀 بدء السحب والمعالجة والحفظ من المصدر {source_id}")
+0336:     
+0337:     # السحب الذكي
+0338:     articles = smart_scrape_from_db(source_id, max_items=max_items)
+0339:     
+0340:     if not articles:
+0341:         logger.warning(f"⚠️  لم يتم جلب أي مقالات")
+0342:         return {
+0343:             'source_id': source_id,
+0344:             'total_scraped': 0,
+0345:             'total_filtered': 0,
+0346:             'total_saved': 0,
+0347:             'total_skipped': 0,
+0348:             'total_errors': 0,
+0349:             'total_with_numbers': 0,
+0350:             'by_language': {}
+0351:         }
+0352:     
+0353:     logger.info(f"📰 تم جلب {len(articles)} مقالة")
+0354:     
+0355:     # معالجة وحفظ المقالات
+0356:     stats = ArticleProcessor.process_and_save(source_id, articles)
+0357:     
+0358:     # إضافة معلومات المصدر
+0359:     stats['source_id'] = source_id
+0360:     stats['total_scraped'] = len(articles)
+0361:     
+0362:     return stats
+0363: 
+0364: 
+0365: def scrape_all_sources_and_save(max_items: int = 10) -> dict:
+0366:     """
+0367:     سحب من جميع المصادر وحفظ في قاعدة البيانات مع الفلترة والمعالجة
+0368:     
+0369:     Args:
+0370:         max_items: عدد المقالات من كل مصدر
+0371:     
+0372:     Returns:
+0373:         إحصائيات شاملة
+0374:     """
+0375:     logger.info(f"🚀 بدء السحب من جميع المصادر")
+0376:     
+0377:     sources = load_rss_sources_from_db()
+0378:     
+0379:     if not sources:
+0380:         logger.error(f"❌ لا توجد مصادر")
+0381:         return {}
+0382:     
+0383:     total_stats = {
+0384:         'total_sources': len(sources),
+0385:         'total_scraped': 0,
+0386:         'total_filtered': 0,
+0387:         'total_saved': 0,
+0388:         'total_skipped': 0,
+0389:         'total_errors': 0,
+0390:         'total_with_numbers': 0,
+0391:         'by_language': {},
+0392:         'by_source': {}
+0393:     }
+0394:     
+0395:     for source_id in sources.keys():
+0396:         try:
+0397:             stats = smart_scrape_and_save(source_id, max_items=max_items)
+0398:             
+0399:             total_stats['total_scraped'] += stats.get('total_scraped', 0)
+0400:             total_stats['total_filtered'] += stats.get('filtered', 0)
+0401:             total_stats['total_saved'] += stats.get('saved', 0)
+0402:             total_stats['total_skipped'] += stats.get('skipped', 0)
+0403:             total_stats['total_errors'] += stats.get('errors', 0)
+0404:             total_stats['total_with_numbers'] += stats.get('with_numbers', 0)
+0405:             
+0406:             # تجميع إحصائيات اللغة
+0407:             for lang, count in stats.get('by_language', {}).items():
+0408:                 if lang not in total_stats['by_language']:
+0409:                     total_stats['by_language'][lang] = 0
+0410:                 total_stats['by_language'][lang] += count
+0411:             
+0412:             total_stats['by_source'][source_id] = stats
+0413:         
+0414:         except Exception as e:
+0415:             logger.error(f"❌ خطأ في معالجة المصدر {source_id}: {e}")
+0416:     
+0417:     logger.info(f"✅ انتهى السحب من جميع المصادر")
+0418:     logger.info(f"   📊 إجمالي: {total_stats['total_scraped']} مقالة")
+0419:     logger.info(f"   🔍 تم الفلترة: {total_stats['total_filtered']}")
+0420:     logger.info(f"   💾 محفوظة: {total_stats['total_saved']}")
+0421:     logger.info(f"   ⏭️  موجودة: {total_stats['total_skipped']}")
+0422:     logger.info(f"   ❌ أخطاء: {total_stats['total_errors']}")
+0423:     logger.info(f"   🔢 مع أرقام: {total_stats['total_with_numbers']}")
+0424:     logger.info(f"   🌐 حسب اللغة: {total_stats['by_language']}")
+0425:     
+0426:     return total_stats

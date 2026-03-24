@@ -73,12 +73,19 @@ OUTPUT_FILE = os.getenv("OUTPUT_FILE", "news_output.json")
 # ============================================
 # X (Twitter) Scraper Configuration
 # ============================================
+USE_X_PLAYWRIGHT = os.getenv("USE_X_PLAYWRIGHT", "true").lower() == "true"
+X_USERNAME = os.getenv("X_USERNAME", "")
+X_PASSWORD = os.getenv("X_PASSWORD", "")
+X_CHROME_PROFILE_DIR = os.getenv("X_CHROME_PROFILE_DIR", "X_scraper/chrome_profile")
 X_AUTH_TOKEN = os.getenv("X_AUTH_TOKEN", "")
 X_CT0_TOKEN = os.getenv("X_CT0_TOKEN", "")
 X_MAX_TWEETS_PER_ACCOUNT = int(os.getenv("X_MAX_TWEETS_PER_ACCOUNT", 20))
 X_DELAY_BETWEEN_ACCOUNTS = int(os.getenv("X_DELAY_BETWEEN_ACCOUNTS", 3))
+X_MAX_SCROLLS = int(os.getenv("X_MAX_SCROLLS", 10))
+X_MAX_TWEETS = int(os.getenv("X_MAX_TWEETS", 30))
 X_DEBUG = os.getenv("X_DEBUG", "true").lower() == "true"
 X_COOKIES_FILE = "x_cookies.json"
+X_PLAYWRIGHT_BATCH_SIZE = int(os.getenv("X_PLAYWRIGHT_BATCH_SIZE", 30))
 
 # ============================================
 # Logging Configuration

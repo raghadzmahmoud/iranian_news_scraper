@@ -33,3 +33,4 @@ news_output.json
 x_cookies.json
 x_scraper_stats_*.json
 tweets_output.json
+media/playwright_profile/

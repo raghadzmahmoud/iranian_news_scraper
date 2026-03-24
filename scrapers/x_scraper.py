@@ -28,6 +28,14 @@ if sys.platform == 'win32':
     import io
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
+# Playwright toggle
+from config.settings import USE_X_PLAYWRIGHT
+if USE_X_PLAYWRIGHT:
+    from .x_playwright import scrape_all_playwright, NewsArticle
+    HAS_PLAYWRIGHT = True
+else:
+    HAS_PLAYWRIGHT = False
+
 
 # ============================================================
 # ⚙️ الإعدادات من .env
