@@ -86,6 +86,7 @@ X_MAX_TWEETS = int(os.getenv("X_MAX_TWEETS", 30))
 X_DEBUG = os.getenv("X_DEBUG", "true").lower() == "true"
 X_COOKIES_FILE = "x_cookies.json"
 X_PLAYWRIGHT_BATCH_SIZE = int(os.getenv("X_PLAYWRIGHT_BATCH_SIZE", 30))
+X_PLAYWRIGHT_CHANNEL = os.getenv("X_PLAYWRIGHT_CHANNEL", "")
 
 # ============================================
 # Logging Configuration

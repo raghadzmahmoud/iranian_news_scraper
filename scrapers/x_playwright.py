@@ -14,8 +14,13 @@ from models.article import NewsArticle
 from database.connection import db
 from utils.logger import logger
 from config.settings import (
-    USE_X_PLAYWRIGHT, USE_X_PLAYWRIGHT, USE_X_PLAYWRIGHT, X_USERNAME, X_PASSWORD, X_CHROME_PROFILE_DIR,
-    X_MAX_SCROLLS, X_MAX_TWEETS
+    USE_X_PLAYWRIGHT,
+    X_USERNAME,
+    X_PASSWORD,
+    X_CHROME_PROFILE_DIR,
+    X_MAX_SCROLLS,
+    X_MAX_TWEETS,
+    X_PLAYWRIGHT_CHANNEL,
 )
 
 CHROME_PROFILE_DIR = X_CHROME_PROFILE_DIR or os.path.join(os.path.dirname(__file__), "../X_scraper/chrome_profile")
@@ -44,13 +49,16 @@ async def load_or_create_session(playwright):
     # Ensure dir exists
     os.makedirs(CHROME_PROFILE_DIR, exist_ok=True)
 
-    context = await playwright.chromium.launch_persistent_context(
-        user_data_dir=CHROME_PROFILE_DIR,
-        channel="chrome",
-        headless=not needs_login,
-        args=STEALTH_ARGS,
-        ignore_default_args=["--enable-automation"],
-    )
+    launch_kwargs = {
+        "user_data_dir": CHROME_PROFILE_DIR,
+        "headless": not needs_login,
+        "args": STEALTH_ARGS,
+        "ignore_default_args": ["--enable-automation"],
+    }
+    if X_PLAYWRIGHT_CHANNEL:
+        launch_kwargs["channel"] = X_PLAYWRIGHT_CHANNEL
+
+    context = await playwright.chromium.launch_persistent_context(**launch_kwargs)
 
     await context.add_init_script("""
         Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
@@ -68,13 +76,16 @@ async def load_or_create_session(playwright):
             logger.warning("Session expired, re-authenticating...")
             await context.close()
             # Relaunch visible for re-login
-            context = await playwright.chromium.launch_persistent_context(
-                user_data_dir=CHROME_PROFILE_DIR,
-                channel="chrome",
-                headless=False,
-                args=STEALTH_ARGS,
-                ignore_default_args=["--enable-automation"],
-            )
+            relaunch_kwargs = {
+                "user_data_dir": CHROME_PROFILE_DIR,
+                "headless": False,
+                "args": STEALTH_ARGS,
+                "ignore_default_args": ["--enable-automation"],
+            }
+            if X_PLAYWRIGHT_CHANNEL:
+                relaunch_kwargs["channel"] = X_PLAYWRIGHT_CHANNEL
+
+            context = await playwright.chromium.launch_persistent_context(**relaunch_kwargs)
             await context.add_init_script("""
                 Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
             """)
