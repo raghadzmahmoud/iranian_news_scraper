@@ -27,7 +27,7 @@ def load_rss_sources_from_db() -> dict:
             SELECT s.id, s.url, st.name as type, s.is_active, s.name, s.source_type_id
             FROM public.sources s
             JOIN public.source_types st ON s.source_type_id = st.id
-            WHERE s.is_active = true AND s.source_type_id = 6
+            WHERE s.is_active = true AND s.source_type_id = 5
             ORDER BY st.name, s.id
         """
         cursor.execute(query)
@@ -93,7 +93,7 @@ def load_source_by_id(source_id: int) -> dict | None:
 
 
 def get_source_type_id_from_db(source_id: int) -> int:
-    """الحصول على نوع المصدر (ID) من قاعدة البيانات - 6=RSS, 7=X"""
+    """الحصول على نوع المصدر (ID) من قاعدة البيانات - 5=RSS, 7=X"""
     try:
         if not db.conn:
             db.connect()
@@ -124,7 +124,7 @@ def parse_rss_from_db(source_id: int, max_items: int = 10) -> list[NewsArticle]:
         logger.error(f"Unknown source: {source_id}")
         return []
 
-    if source.get('source_type_id') != 6:
+    if source.get('source_type_id') != 5:
         logger.warning(f"Source {source_id} is not RSS (type {source.get('source_type_id')}); skipping.")
         return []
 
@@ -300,7 +300,7 @@ def scrape_full_article_from_db(article: NewsArticle, source_id: int) -> NewsArt
 
 
 def smart_scrape_from_db(source_id: int, max_items: int = 10) -> list[NewsArticle]:
-    """سحب ذكي من قاعدة البيانات بناءً على نوع المصدر (ID 6=RSS, ID 7=X)"""
+    """سحب ذكي من قاعدة البيانات بناءً على نوع المصدر (ID 5=RSS, ID 7=X)"""
     import asyncio
     from scrapers.x_scraper import setup_client, scrape_account
 
@@ -350,7 +350,7 @@ def smart_scrape_from_db(source_id: int, max_items: int = 10) -> list[NewsArticl
             logger.error(f"❌ خطأ في سحب X: {e}")
             return []
 
-    # إذا كان المصدر من نوع RSS (ID=6) أو أي نوع آخر
+    # إذا كان المصدر من نوع RSS (ID=5) أو أي نوع آخر
     articles = parse_rss_from_db(source_id, max_items=max_items)
 
     logger.info(f"📝 سحب من RSS")
