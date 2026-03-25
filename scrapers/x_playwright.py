@@ -32,6 +32,9 @@ STEALTH_ARGS = [
     "--no-first-run",
     "--no-default-browser-check",
     "--disable-infobars",
+    "--no-sandbox",
+    "--disable-gpu",
+    "--disable-dev-shm-usage",
 ]
 
 class AuthChallengeError(Exception):

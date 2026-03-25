@@ -18,6 +18,10 @@ RUN apt-get update && apt-get install -y \
     libxcomposite1 \
     libxdamage1 \
     libxrandr2 \
+    libxkbcommon0 \
+    libpango-1.0-0 \
+    libpangocairo-1.0-0 \
+    libcairo2 \
     && rm -rf /var/lib/apt/lists/*
 
 # نسخ ملف المتطلبات
