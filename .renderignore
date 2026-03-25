@@ -40,7 +40,6 @@ wheels/
 .gitattributes
 
 # Documentation
-*.md
 docs/
 
 # Tests
@@ -53,11 +52,13 @@ htmlcov/
 logs/
 *.log
 
-# Media (large files)
-media/
-*.mp4
-*.mp3
-*.wav
+# Media (large files - keep only necessary)
+media/playwright_profile/
+media/*.mp4
+media/*.mp3
+media/*.wav
+media/*.jpg
+media/*.png
 
 # Environment
 .env
@@ -70,4 +71,7 @@ media/
 .travis.yml
 Makefile
 docker-compose.yml
-Dockerfile
+
+# Keep Dockerfile for Render
+# Dockerfile is needed for Render builds
+

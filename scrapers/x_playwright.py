@@ -47,7 +47,7 @@ def parse_credentials():
     return X_USERNAME, X_PASSWORD
 
 async def load_or_create_session(playwright):
-    """Launch persistent Chrome context with auth"""
+    """Launch persistent Chrome context with auth - optimized for Render"""
     needs_login = not os.path.exists(os.path.join(CHROME_PROFILE_DIR, "Default"))
 
     # Ensure dir exists
@@ -56,34 +56,72 @@ async def load_or_create_session(playwright):
     launch_kwargs = {
         "user_data_dir": CHROME_PROFILE_DIR,
         "headless": X_PLAYWRIGHT_HEADLESS,
-        "args": STEALTH_ARGS,
+        "args": STEALTH_ARGS + [
+            "--disable-dev-shm-usage",  # Critical for Render (limited /dev/shm)
+            "--single-process",  # Reduce memory usage
+            "--no-first-run",
+            "--no-default-browser-check",
+        ],
         "ignore_default_args": ["--enable-automation"],
     }
     if X_PLAYWRIGHT_CHANNEL:
         launch_kwargs["channel"] = X_PLAYWRIGHT_CHANNEL
 
-    context = await playwright.chromium.launch_persistent_context(**launch_kwargs)
+    try:
+        context = await playwright.chromium.launch_persistent_context(**launch_kwargs)
+    except Exception as e:
+        logger.error(f"Failed to launch browser: {e}")
+        raise
 
     await context.add_init_script("""
         Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
         Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+        Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
     """)
 
     page = context.pages[0] if context.pages else await context.new_page()
 
     if needs_login:
+        logger.info("🔐 Performing initial login...")
         await _perform_login(page)
     else:
         # Verify session
-        await page.goto("https://x.com/home", timeout=30000)
-        if "login" in page.url or "i/flow" in page.url:
-            logger.warning("Session expired, re-authenticating...")
+        try:
+            await page.goto("https://x.com/home", timeout=30000)
+            await page.wait_for_timeout(2000)
+            
+            if "login" in page.url or "i/flow" in page.url:
+                logger.warning("Session expired, re-authenticating...")
+                await context.close()
+                # Relaunch for re-login
+                relaunch_kwargs = {
+                    "user_data_dir": CHROME_PROFILE_DIR,
+                    "headless": X_PLAYWRIGHT_HEADLESS,
+                    "args": STEALTH_ARGS + [
+                        "--disable-dev-shm-usage",
+                        "--single-process",
+                    ],
+                    "ignore_default_args": ["--enable-automation"],
+                }
+                if X_PLAYWRIGHT_CHANNEL:
+                    relaunch_kwargs["channel"] = X_PLAYWRIGHT_CHANNEL
+
+                context = await playwright.chromium.launch_persistent_context(**relaunch_kwargs)
+                await context.add_init_script("""
+                    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+                """)
+                page = context.pages[0] if context.pages else await context.new_page()
+                await _perform_login(page)
+        except Exception as e:
+            logger.error(f"Session verification failed: {e}. Attempting re-login...")
             await context.close()
-            # Relaunch visible for re-login
             relaunch_kwargs = {
                 "user_data_dir": CHROME_PROFILE_DIR,
                 "headless": X_PLAYWRIGHT_HEADLESS,
-                "args": STEALTH_ARGS,
+                "args": STEALTH_ARGS + [
+                    "--disable-dev-shm-usage",
+                    "--single-process",
+                ],
                 "ignore_default_args": ["--enable-automation"],
             }
             if X_PLAYWRIGHT_CHANNEL:
@@ -172,13 +210,27 @@ async def scrape_profile(page, source: Dict, max_scrolls=None, max_tweets=None):
     seen_ids = set()
 
     url = f"https://x.com/{handle}"
-    await page.goto(url, timeout=30000)
+    
+    try:
+        await page.goto(url, timeout=30000)
+    except Exception as e:
+        logger.error(f"  [{handle}] Failed to navigate to profile: {e}")
+        return []
+
+    # Wait for page to stabilize
+    await page.wait_for_timeout(2000)
 
     try:
-        await page.wait_for_selector(SEL_TWEET, timeout=30000)
-    except:
-        logger.warning(f"  [{handle}] No tweets (private/suspended)")
-        return []
+        await page.wait_for_selector(SEL_TWEET, timeout=60000)
+    except Exception as e:
+        logger.warning(f"  [{handle}] No tweets found or page load failed: {e}")
+        # Try alternative selector as fallback
+        try:
+            await page.wait_for_selector('[data-testid="cellInnerDiv"]', timeout=10000)
+            logger.info(f"  [{handle}] Using alternative selector")
+        except:
+            logger.warning(f"  [{handle}] Account is private/suspended or X blocked the request")
+            return []
 
     logger.info(f"  [{handle}] Scraping...")
 
