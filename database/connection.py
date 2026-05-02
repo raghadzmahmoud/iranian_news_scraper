@@ -33,9 +33,26 @@ class DatabaseConnection:
             logger.error(f"❌ خطأ في الاتصال بقاعدة البيانات: {e}")
             return False
 
+    def ensure_connection(self):
+        """التأكد من أن الاتصال نشط، وإعادة الاتصال إذا لزم الأمر"""
+        try:
+            # التحقق من وجود الاتصال
+            if not self.conn or self.conn.closed:
+                logger.warning("⚠️  الاتصال مغلق، إعادة الاتصال...")
+                return self.connect()
+            
+            # التحقق من صحة الاتصال بتنفيذ استعلام بسيط
+            with self.conn.cursor() as test_cursor:
+                test_cursor.execute("SELECT 1")
+            return True
+        except (psycopg2.Error, AttributeError) as e:
+            logger.warning(f"⚠️  الاتصال غير صالح: {e}، إعادة الاتصال...")
+            return self.connect()
+
     def get_sources(self):
         """جلب المصادر من قاعدة البيانات"""
         try:
+            self.ensure_connection()
             self.cursor.execute("SELECT id, url, is_active FROM public.sources WHERE is_active = true")
             sources = self.cursor.fetchall()
             logger.info(f"✅ تم جلب {len(sources)} مصدر من قاعدة البيانات")
@@ -48,6 +65,7 @@ class DatabaseConnection:
     def get_telegram_sources(self):
         """جلب مصادر Telegram من قاعدة البيانات"""
         try:
+            self.ensure_connection()
             self.cursor.execute(
                 """SELECT id, source_type_id, url, is_active 
                    FROM public.sources 
@@ -64,6 +82,7 @@ class DatabaseConnection:
     def url_exists(self, url: str) -> bool:
         """التحقق من وجود URL في قاعدة البيانات"""
         try:
+            self.ensure_connection()
             self.cursor.execute("SELECT 1 FROM public.raw_news WHERE url = %s LIMIT 1", (url,))
             result = self.cursor.fetchone()
             return result is not None
@@ -75,6 +94,7 @@ class DatabaseConnection:
     def update_article_relevance(self, raw_data_id: int, is_relevant: bool, matched_keywords: list = None):
         """تحديث حالة الصلة والكلمات المفتاحية للمقالة"""
         try:
+            self.ensure_connection()
             keywords_str = ",".join(matched_keywords) if matched_keywords else None
             
             # إذا كان العمود موجود، نحدثه
@@ -101,6 +121,7 @@ class DatabaseConnection:
             - False إذا حدث خطأ في قاعدة البيانات
         """
         try:
+            self.ensure_connection()
             query = """
                 INSERT INTO public.raw_news 
                 (source_id, url, title_original, content_original, language_id, published_at, fetched_at, processing_status, has_numbers)

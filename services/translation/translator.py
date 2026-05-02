@@ -117,15 +117,19 @@ class NewsTranslator:
         Returns:
             Dictionary with success/failure counts
         """
-        db = DatabaseConnection()
-        if not db.connect():
-            logger.error("Failed to connect to database")
+        from database.connection import db
+        
+        try:
+            db.ensure_connection()
+        except Exception as e:
+            logger.error(f"Failed to connect to database: {e}")
             return {"success": 0, "failed": len(raw_news_ids), "error": "Database connection failed"}
 
         try:
             # Fetch articles that need translation
             placeholders = ",".join(["%s"] * len(raw_news_ids))
-            db.cursor.execute(
+            cursor = db.conn.cursor()
+            cursor.execute(
                 f"""
                 SELECT id, title_original, content_original, language_id
                 FROM raw_news
@@ -136,7 +140,9 @@ class NewsTranslator:
                 raw_news_ids,
             )
 
-            articles = db.cursor.fetchall()
+            articles = cursor.fetchall()
+            cursor.close()
+            
             if not articles:
                 logger.info("No articles to translate")
                 return {"success": 0, "failed": 0, "skipped": len(raw_news_ids)}
@@ -199,7 +205,8 @@ class NewsTranslator:
 
                 try:
                     # Check if translation already exists
-                    db.cursor.execute(
+                    cursor = db.conn.cursor()
+                    cursor.execute(
                         """
                         SELECT id FROM translations
                         WHERE raw_news_id = %s AND language_id = %s
@@ -207,11 +214,11 @@ class NewsTranslator:
                         (raw_news_id, target_language_id),
                     )
 
-                    existing = db.cursor.fetchone()
+                    existing = cursor.fetchone()
 
                     if existing:
                         # Update existing translation
-                        db.cursor.execute(
+                        cursor.execute(
                             """
                             UPDATE translations
                             SET title = %s, content = %s
@@ -226,7 +233,7 @@ class NewsTranslator:
                         )
                     else:
                         # Insert new translation
-                        db.cursor.execute(
+                        cursor.execute(
                             """
                             INSERT INTO translations (raw_news_id, language_id, title, content)
                             VALUES (%s, %s, %s, %s)
@@ -241,7 +248,7 @@ class NewsTranslator:
 
                     # Update processing_status to 1 (true) after successful translation
                     # 1 = جاهز للنشر (Ready for publishing)
-                    db.cursor.execute(
+                    cursor.execute(
                         """
                         UPDATE raw_news
                         SET processing_status = 1
@@ -251,12 +258,13 @@ class NewsTranslator:
                     )
                     
                     # التحقق من أن التحديث تم بنجاح
-                    if db.cursor.rowcount > 0:
+                    if cursor.rowcount > 0:
                         updated_status_count += 1
                         logger.info(f"✅ تم حفظ الترجمة للخبر {raw_news_id} وتحديث الحالة إلى 1 (جاهز للنشر)")
                     else:
                         logger.warning(f"⚠️  لم يتم تحديث الحالة للخبر {raw_news_id}")
 
+                    cursor.close()
                     success_count += 1
 
                 except Exception as e:

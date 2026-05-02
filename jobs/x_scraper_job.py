@@ -15,8 +15,7 @@ async def run_x_scraper_job():
     
     try:
         # الاتصال بقاعدة البيانات (بدون إغلاق في النهاية)
-        if not db.conn:
-            db.connect()
+        db.ensure_connection()
         
         # سحب من جميع المصادر
         stats = await scrape_all_x_sources()

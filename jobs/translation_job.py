@@ -21,15 +21,17 @@ class TranslationJob:
 
         translator = NewsTranslator(api_key=self.api_key, max_concurrent=self.max_concurrent)
 
-        # استخدام الاتصال المشترك بدلاً من إنشاء واحد جديد
-        if not db.conn:
-            if not db.connect():
-                logger.error("Failed to connect to database")
-                return {"status": "error", "message": "Database connection failed"}
+        # التأكد من الاتصال بقاعدة البيانات
+        try:
+            db.ensure_connection()
+        except Exception as e:
+            logger.error(f"Failed to connect to database: {e}")
+            return {"status": "error", "message": "Database connection failed"}
 
         try:
             # Get pending articles (language_id 2=Hebrew, 3=English)
-            db.cursor.execute(
+            cursor = db.conn.cursor()
+            cursor.execute(
                 """
                 SELECT id FROM raw_news
                 WHERE language_id IN (2, 3)
@@ -43,7 +45,9 @@ class TranslationJob:
                 (batch_size,),
             )
 
-            pending_articles = db.cursor.fetchall()
+            pending_articles = cursor.fetchall()
+            cursor.close()
+            
             raw_news_ids = [
                 article['id'] if isinstance(article, dict) else article[0]
                 for article in pending_articles

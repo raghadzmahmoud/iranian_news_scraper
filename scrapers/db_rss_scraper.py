@@ -19,8 +19,7 @@ from utils.logger import logger
 def load_rss_sources_from_db() -> dict:
     """تحميل المصادر من قاعدة البيانات"""
     try:
-        if not db.conn:
-            db.connect()
+        db.ensure_connection()
         
         cursor = db.conn.cursor()
         query = """
@@ -59,8 +58,7 @@ def load_rss_sources_from_db() -> dict:
 def load_source_by_id(source_id: int) -> dict | None:
     """Load a single source by id from the database."""
     try:
-        if not db.conn:
-            db.connect()
+        db.ensure_connection()
 
         cursor = db.conn.cursor()
         query = """
@@ -95,8 +93,7 @@ def load_source_by_id(source_id: int) -> dict | None:
 def get_source_type_id_from_db(source_id: int) -> int:
     """الحصول على نوع المصدر (ID) من قاعدة البيانات - 5=RSS, 7=X"""
     try:
-        if not db.conn:
-            db.connect()
+        db.ensure_connection()
         
         cursor = db.conn.cursor()
         query = """

@@ -14,8 +14,7 @@ class NewsStorage:
     def get_language_id(language_code: str) -> int:
         """الحصول على معرّف اللغة"""
         try:
-            if not db.conn:
-                db.connect()
+            db.ensure_connection()
             
             cursor = db.conn.cursor()
             query = "SELECT id FROM public.languages WHERE code = %s"
@@ -35,8 +34,7 @@ class NewsStorage:
     def url_exists(url: str) -> bool:
         """التحقق من وجود URL في قاعدة البيانات"""
         try:
-            if not db.conn:
-                db.connect()
+            db.ensure_connection()
             
             cursor = db.conn.cursor()
             
@@ -89,8 +87,7 @@ class NewsStorage:
         """
         cursor = None
         try:
-            if not db.conn:
-                db.connect()
+            db.ensure_connection()
             
             cursor = db.conn.cursor()
             
@@ -211,8 +208,7 @@ class NewsStorage:
     def get_articles_by_source(source_id: int, limit: int = 10) -> list:
         """الحصول على أخبار من مصدر معين"""
         try:
-            if not db.conn:
-                db.connect()
+            db.ensure_connection()
             
             cursor = db.conn.cursor()
             query = """
@@ -237,8 +233,7 @@ class NewsStorage:
     def get_unprocessed_articles(limit: int = 100) -> list:
         """الحصول على أخبار لم تتم معالجتها"""
         try:
-            if not db.conn:
-                db.connect()
+            db.ensure_connection()
             
             cursor = db.conn.cursor()
             query = """
@@ -263,8 +258,7 @@ class NewsStorage:
     def update_processing_status(article_id: int, status: int) -> bool:
         """تحديث حالة معالجة المقالة"""
         try:
-            if not db.conn:
-                db.connect()
+            db.ensure_connection()
             
             cursor = db.conn.cursor()
             query = "UPDATE public.raw_news SET processing_status = %s WHERE id = %s"
@@ -283,8 +277,7 @@ class NewsStorage:
     def get_stats() -> dict:
         """الحصول على إحصائيات الأخبار"""
         try:
-            if not db.conn:
-                db.connect()
+            db.ensure_connection()
             
             cursor = db.conn.cursor()
             

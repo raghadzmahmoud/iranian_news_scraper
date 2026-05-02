@@ -11,8 +11,7 @@ from utils.logger import logger
 def get_recent_articles(limit: int = 200) -> list:
     """الحصول على آخر N خبر من قاعدة البيانات"""
     try:
-        if not db.conn:
-            db.connect()
+        db.ensure_connection()
         
         cursor = db.conn.cursor()
         query = """
@@ -38,8 +37,7 @@ def get_recent_articles(limit: int = 200) -> list:
 def update_has_numbers_batch(updates: list) -> int:
     """تحديث حقول has_numbers بشكل دفعي (batch)"""
     try:
-        if not db.conn:
-            db.connect()
+        db.ensure_connection()
         
         cursor = db.conn.cursor()
         
@@ -173,8 +171,7 @@ def verify_update(limit: int = 200) -> dict:
         إحصائيات التحقق
     """
     try:
-        if not db.conn:
-            db.connect()
+        db.ensure_connection()
         
         cursor = db.conn.cursor()
         
@@ -237,8 +234,7 @@ def verify_update(limit: int = 200) -> dict:
 def show_sample_articles(limit: int = 10) -> None:
     """عرض عينة من الأخبار المحدثة"""
     try:
-        if not db.conn:
-            db.connect()
+        db.ensure_connection()
         
         cursor = db.conn.cursor()
         query = """

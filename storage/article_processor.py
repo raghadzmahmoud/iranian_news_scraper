@@ -61,8 +61,7 @@ class ArticleProcessor:
         """التحقق من أن المصدر هو X (Twitter)"""
         try:
             from database.connection import db
-            if not db.conn:
-                db.connect()
+            db.ensure_connection()
             
             cursor = db.conn.cursor()
             query = "SELECT source_type_id FROM public.sources WHERE id = %s"

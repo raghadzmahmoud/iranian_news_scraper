@@ -7,7 +7,7 @@ import threading
 import time
 from datetime import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
-from scrapers.db_rss_scraper import scrape_all_sources_and_save
+from scrapers.db_rss_scraper import scrape_all_sources_and_save, load_rss_sources_from_db
 from jobs.translation_job import run_translation_job
 from utils.logger import logger
 
@@ -26,6 +26,21 @@ class ParallelWorker:
         """تشغيل السحب في thread منفصل"""
         try:
             logger.info(f"🔄 بدء السحب في الوقت: {datetime.now()}")
+            
+            # طباعة المصادر قبل السحب
+            sources = load_rss_sources_from_db()
+            if sources:
+                logger.info("="*80)
+                logger.info(f"📋 المصادر المتاحة للسحب ({len(sources)} مصدر):")
+                logger.info("="*80)
+                for source_id, source_info in sources.items():
+                    logger.info(f"   🔹 [{source_id}] {source_info['name']}")
+                    logger.info(f"      URL: {source_info['url']}")
+                    logger.info(f"      النوع: {source_info['type']}")
+                    logger.info(f"      نشط: {'✅' if source_info['active'] else '❌'}")
+                    logger.info("-"*80)
+                logger.info("="*80)
+            
             result = scrape_all_sources_and_save(max_items=10)
             logger.info(f"✅ انتهى السحب: {result}")
         except Exception as e:
@@ -41,28 +56,28 @@ class ParallelWorker:
             logger.error(f"❌ خطأ في الترجمة: {e}")
     
     def schedule_scraping(self):
-        """جدولة السحب كل 5 دقايق"""
+        """جدولة السحب كل 10 دقايق"""
         self.scheduler.add_job(
             self.run_scraping,
             'interval',
-            minutes=5,
+            minutes=10,
             id='scraping_job',
             name='سحب الأخبار',
             max_instances=1
         )
-        logger.info("📅 تم جدولة السحب كل 5 دقايق")
+        logger.info("📅 تم جدولة السحب كل 10 دقايق")
     
     def schedule_translation(self):
-        """جدولة الترجمة كل 10 دقايق"""
+        """جدولة الترجمة كل 15 دقايق"""
         self.scheduler.add_job(
             self.run_translation,
             'interval',
-            minutes=10,
+            minutes=15,
             id='translation_job',
             name='ترجمة الأخبار',
             max_instances=1
         )
-        logger.info("📅 تم جدولة الترجمة كل 10 دقايق")
+        logger.info("📅 تم جدولة الترجمة كل 15 دقايق")
     
     def start(self):
         """بدء الوركر"""

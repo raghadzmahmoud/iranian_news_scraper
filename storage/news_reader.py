@@ -12,8 +12,7 @@ class NewsReader:
     def get_by_id(article_id: int) -> dict:
         """الحصول على مقالة بـ ID"""
         try:
-            if not db.conn:
-                db.connect()
+            db.ensure_connection()
             
             cursor = db.conn.cursor()
             query = """
@@ -56,8 +55,7 @@ class NewsReader:
     def get_by_source(source_id: int, limit: int = 10, offset: int = 0) -> list:
         """الحصول على أخبار من مصدر معين"""
         try:
-            if not db.conn:
-                db.connect()
+            db.ensure_connection()
             
             cursor = db.conn.cursor()
             query = """
@@ -100,8 +98,7 @@ class NewsReader:
     def get_unprocessed(limit: int = 100, offset: int = 0) -> list:
         """الحصول على أخبار لم تتم معالجتها"""
         try:
-            if not db.conn:
-                db.connect()
+            db.ensure_connection()
             
             cursor = db.conn.cursor()
             query = """
@@ -146,8 +143,7 @@ class NewsReader:
     def get_by_language(language_code: str, limit: int = 10, offset: int = 0) -> list:
         """الحصول على أخبار بلغة معينة"""
         try:
-            if not db.conn:
-                db.connect()
+            db.ensure_connection()
             
             cursor = db.conn.cursor()
             query = """
@@ -190,8 +186,7 @@ class NewsReader:
     def search(query_text: str, limit: int = 10) -> list:
         """البحث عن أخبار"""
         try:
-            if not db.conn:
-                db.connect()
+            db.ensure_connection()
             
             cursor = db.conn.cursor()
             query = """
@@ -235,8 +230,7 @@ class NewsReader:
     def get_stats() -> dict:
         """الحصول على إحصائيات الأخبار"""
         try:
-            if not db.conn:
-                db.connect()
+            db.ensure_connection()
             
             cursor = db.conn.cursor()
             

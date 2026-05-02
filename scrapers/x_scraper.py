@@ -65,8 +65,7 @@ def extract_username_from_url(url: str) -> Optional[str]:
 def load_x_sources_from_db() -> List[Dict]:
     """تحميل مصادر X من قاعدة البيانات (source_type_id = 7)"""
     try:
-        if not db.conn:
-            db.connect()
+        db.ensure_connection()
         
         cursor = db.conn.cursor()
         query = """
@@ -476,8 +475,7 @@ async def main():
     """الدالة الرئيسية"""
     try:
         # الاتصال بقاعدة البيانات
-        if not db.conn:
-            db.connect()
+        db.ensure_connection()
         
         # سحب من جميع المصادر
         stats = await scrape_all_x_sources()

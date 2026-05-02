@@ -46,4 +46,4 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 ENV X_CHROME_PROFILE_DIR=/tmp/playwright_profile
 
 # أمر التشغيل للـ Worker المتوازي
-CMD ["python", "worker_parallel_advanced.py"]
+CMD ["python", "worker_parallel_improved.py"]

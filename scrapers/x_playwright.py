@@ -290,8 +290,7 @@ async def scrape_profile(page, source: Dict, max_scrolls=None, max_tweets=None):
 
 async def load_x_sources_from_db():
     """Load active X sources (source_type_id=7)"""
-    if not db.conn:
-        db.connect()
+    db.ensure_connection()
     
     cursor = db.conn.cursor()
     query = """
